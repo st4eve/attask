@@ -4,6 +4,24 @@ import { parseIssuePath } from './paths';
 import { checkDelete, checkNotPlanned, planPriority, planStatus } from './rules';
 import { makeRef } from './types';
 
+/**
+ * Reads a request body as a JSON object.
+ *
+ * Args:
+ * 	request: The incoming request.
+ *
+ * Returns:
+ * 	The parsed object, or null if the body is not valid JSON or not a plain object.
+ */
+async function readJson(request: Request): Promise<Record<string, unknown> | null> {
+	try {
+		const body: unknown = await request.json();
+		return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
 
@@ -15,13 +33,18 @@ async function route(request: Request, env: Env): Promise<Response> {
 		return Response.json((await fetchBoard(env.GITHUB_TOKEN)).items);
 	}
 
+	// only the three issue routes are served; anything else falls through to 404 without touching github
 	const issue = parseIssuePath(url.pathname);
-	if (issue) {
+	const supported =
+		(request.method === 'GET' && issue?.action === 'detail') ||
+		(request.method === 'POST' && issue?.action === 'not-planned') ||
+		(request.method === 'DELETE' && issue?.action === '');
+	if (issue && supported) {
 		const board = await fetchBoard(env.GITHUB_TOKEN);
 		const item = board.items.find((i) => i.ref === makeRef(issue.repo, issue.number));
 
 		if (request.method === 'GET' && issue.action === 'detail') {
-			if (!item) return new Response('not found', { status: 404 });
+			if (!item) return Response.json({ error: 'not on the board' }, { status: 404 });
 			return Response.json(await fetchDetail(env.GITHUB_TOKEN, issue.repo, issue.number));
 		}
 		if (request.method === 'POST' && issue.action === 'not-planned') {
@@ -40,7 +63,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 
 	const edit = url.pathname.match(/^\/items\/([\w-]+)\/status$/);
 	if (request.method === 'POST' && edit) {
-		const body: { status?: unknown } = await request.json();
+		const body = await readJson(request);
+		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
 		const board = await fetchBoard(env.GITHUB_TOKEN);
 		const plan = planStatus(board.items, edit[1], String(body.status));
 		if (!plan.ok) return Response.json({ error: plan.reason }, { status: 409 });
@@ -50,7 +74,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 
 	const prio = url.pathname.match(/^\/items\/([\w-]+)\/priority$/);
 	if (request.method === 'POST' && prio) {
-		const body: { priority?: unknown } = await request.json();
+		const body = await readJson(request);
+		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
 		const board = await fetchBoard(env.GITHUB_TOKEN);
 		const plan = planPriority(board.items, prio[1], String(body.priority));
 		if (!plan.ok) return Response.json({ error: plan.reason }, { status: 409 });
@@ -59,7 +84,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 	}
 
 	if (request.method === 'POST' && url.pathname === '/tasks') {
-		const body: { title?: unknown; repo?: unknown } = await request.json();
+		const body = await readJson(request);
+		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
 		const title = typeof body.title === 'string' ? body.title.trim() : '';
 		if (!title) return Response.json({ error: 'title is empty' }, { status: 400 });
 		const repo = String(body.repo);
