@@ -106,7 +106,7 @@ export function projectOf(items: BoardItem[], item: BoardItem): BoardItem | unde
 }
 
 /**
- * The statuses an item may be set to, given the board rules: a project takes any project status; an inbox item stays in the inbox (triage happens in the planner); a task of a paused project can only match it or be done; any other task takes any task status but Inbox.
+ * The statuses an item may be set to, given the board rules: a project takes any project status; an inbox item may stay or move to any task status (by hand or the planner); a task of a paused project can only match it or be done; any other task takes any task status but Inbox.
  *
  * Args:
  * 	item: The item to change.
@@ -114,7 +114,7 @@ export function projectOf(items: BoardItem[], item: BoardItem): BoardItem | unde
  */
 export function allowedStatuses(item: BoardItem, items: BoardItem[]): string[] {
 	if (item.isProject) return PROJECT_STATUSES;
-	if (item.status === 'Inbox') return ['Inbox'];
+	if (item.status === 'Inbox') return TASK_STATUSES;
 	const project = projectOf(items, item);
 	if (project?.status && PAUSED_STATUSES.includes(project.status)) return [project.status, 'Done'];
 	return TASK_STATUSES.filter((s) => s !== 'Inbox');

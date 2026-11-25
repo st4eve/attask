@@ -5,7 +5,7 @@
     import { postTask } from "../lib/api";
     import { board, inboxTasks, loadBoard } from "../lib/board.svelte";
 
-    /** Open tasks still in the inbox, read-only: an agent triages them. The button opens Claude with a triage prompt for these issues already filled in, where it can be edited before sending. */
+    /** Open tasks still in the inbox. Each can be moved by hand from its detail sheet's status menu, or all triaged at once by an agent. The button opens Claude with a triage prompt for these issues already filled in, where it can be edited before sending. */
     let tasks = $derived(inboxTasks(board.items));
 
     const prompt =
