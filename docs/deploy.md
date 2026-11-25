@@ -31,7 +31,7 @@ The board is project #2 of `st4eve`. Add the `Backlog` option to the board's Sta
 
 To regenerate the Worker's types (`npm run cf-typegen`) you need a local `worker/.dev.vars` file (git-ignored, copy `.dev.vars.example`); the command reads the secret names from it.
 
-Some actions write in several steps (a status change that pauses a project's tasks, closing an issue and then setting Done). If one fails part-way, retrying the same action is safe: the Worker re-reads the board and only changes what still differs. The exception is creating a task: if it fails after the issue exists, a retry makes a second issue, so check the repo first.
+Some actions write in several steps. If a status change that pauses a project's tasks fails part-way, retrying it is safe: the Worker re-reads the board and only changes what still differs. Two actions are not safe to retry. Creating a task: if it fails after the issue exists, a retry makes a second issue, so check the repo first. Removing a task as not planned: the issue is closed first, so if setting Done then fails, a retry is refused because the item is already closed; set its Status to Done on the board by hand.
 
 `ALLOWED_ORIGINS` is not a secret and is already in `wrangler.jsonc`, set to `https://st4eve.github.io`. It is an origin, so no path and no trailing slash.
 
