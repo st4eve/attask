@@ -1,81 +1,95 @@
 import { describe, expect, it } from "vitest";
-import type { BoardItem } from "./api";
+import { makeRef, type BoardItem } from "../../../worker/src/types";
 import { dueSoon, nextList, type NextFilters } from "./next";
 
-function item(over: Partial<BoardItem>): BoardItem {
+const HOME = "st4eve/MyLife";
+const OTHER = "QNLQueens/WickedIdeas";
+
+function item(over: Partial<BoardItem> & { number: number }): BoardItem {
+    const repo = over.repo ?? HOME;
     return {
-        id: `id${over.number}`,
-        number: 0,
+        id: `id-${repo}-${over.number}`,
+        repo,
+        ref: makeRef(repo, over.number),
         title: "t",
         url: "",
         open: true,
         isProject: false,
         parent: null,
         status: null,
-        category: null,
+        area: null,
         priority: null,
-        kind: null,
-        effort: null,
+        size: null,
+        lab: false,
         due: null,
         updatedAt: "",
         blocked: false,
+        canDelete: true,
         ...over,
     };
 }
 
-// two doing projects in different categories and priorities, one paused
+// project #1 in each repo; the one in OTHER is paused, so its tasks never show
 const board: BoardItem[] = [
-    item({ number: 1, isProject: true, status: "doing", category: "degree", priority: "!" }),
-    item({ number: 2, isProject: true, status: "doing", category: "personal", priority: "!!!" }),
-    item({ number: 3, isProject: true, status: "waiting", category: "degree", priority: "!!!" }),
-    item({ number: 10, parent: 1, status: "next", effort: "1h" }),
-    item({ number: 11, parent: 2, status: "next", effort: "half-day" }),
-    item({ number: 12, parent: 1, status: "doing", effort: "15m", updatedAt: "2026-11-01T00:00:00Z" }),
-    item({ number: 13, parent: 2, status: "doing", updatedAt: "2026-11-10T00:00:00Z" }),
-    item({ number: 14, parent: 2, status: "backlog", effort: "15m" }),
-    item({ number: 15, parent: 1, status: "backlog", effort: "half-day" }),
-    item({ number: 16, parent: 3, status: "waiting", effort: "15m" }),
-    item({ number: 17, parent: 1, status: "next", effort: "15m", kind: "hardware" }),
-    item({ number: 18, parent: 1, status: "next", effort: "multi-day" }),
-    item({ number: 19, parent: 1, status: "done", open: false }),
-    item({ number: 24, parent: 2, status: "next", effort: "15m", blocked: true }),
+    item({ number: 1, isProject: true, status: "In progress", area: "Research", priority: "P2" }),
+    item({ number: 1, repo: OTHER, isProject: true, status: "Waiting", area: "Research", priority: "P0" }),
+    item({ number: 10, parent: `${HOME}#1`, status: "To do", size: "S" }),
+    item({ number: 11, parent: `${HOME}#1`, status: "In progress", size: "XS", updatedAt: "2026-11-01T00:00:00Z" }),
+    item({ number: 12, parent: `${HOME}#1`, status: "Backlog", size: "M" }),
+    item({ number: 10, repo: OTHER, parent: `${OTHER}#1`, status: "To do", size: "XS" }),
+    // flat tasks qualify on their own status
+    item({ number: 20, status: "To do", area: "Personal", priority: "P0" }),
+    item({ number: 21, status: "In progress", area: "Course", updatedAt: "2026-11-05T00:00:00Z", size: "L" }),
+    item({ number: 22, status: "To do", area: "Course", priority: "P2", due: "2026-11-20", size: "XS" }),
+    item({ number: 23, repo: OTHER, status: "To do", area: "Course", priority: "P2", due: "2026-11-20", size: "XS" }),
+    item({ number: 24, status: "To do", lab: true, size: "XS", area: "Research" }),
+    item({ number: 25, status: "To do", blocked: true }),
+    item({ number: 26, status: "Inbox" }),
+    item({ number: 27, status: "Done", open: false }),
 ];
 
-const all: NextFilters = { time: "any", place: "lab", category: "all", backlog: true };
-const numbers = (items: BoardItem[]): number[] => items.map((i) => i.number);
+const all: NextFilters = { time: "any", place: "lab", area: "all", backlog: true };
+const refs = (items: BoardItem[]): string[] => items.map((i) => i.ref);
 
 describe("nextList", () => {
-    it("orders doing by recency, next by project priority, backlog last, and leaves out blocked tasks", () => {
-        expect(numbers(nextList(board, all))).toEqual([13, 12, 11, 10, 17, 18, 14, 15]);
+    it("orders In progress by recency, then To do by priority, due, repo and number, then Backlog", () => {
+        expect(refs(nextList(board, all))).toEqual([
+            `${HOME}#21`,
+            `${HOME}#11`,
+            `${HOME}#20`,
+            `${OTHER}#23`,
+            `${HOME}#22`,
+            `${HOME}#10`,
+            `${HOME}#24`,
+            `${HOME}#12`,
+        ]);
     });
-    it("leaves out backlog when the toggle is off", () => {
-        expect(numbers(nextList(board, { ...all, backlog: false }))).toEqual([13, 12, 11, 10, 17, 18]);
+    it("leaves out Backlog when the toggle is off", () => {
+        expect(refs(nextList(board, { ...all, backlog: false }))).not.toContain(`${HOME}#12`);
     });
-    it("caps effort by the time toggle and drops tasks with no effort", () => {
-        expect(numbers(nextList(board, { ...all, time: "1h" }))).toEqual([12, 10, 17, 14]);
-        expect(numbers(nextList(board, { ...all, time: "15m" }))).toEqual([12, 17, 14]);
+    it("keeps the same-numbered task of a paused project in another repo out", () => {
+        expect(refs(nextList(board, all))).not.toContain(`${OTHER}#10`);
     });
-    it("hides lab kinds at home", () => {
-        expect(numbers(nextList(board, { ...all, place: "home" }))).not.toContain(17);
+    it("caps size by the time toggle and shows unsized tasks only under any", () => {
+        expect(refs(nextList(board, { ...all, time: "15m" }))).toEqual([`${HOME}#11`, `${OTHER}#23`, `${HOME}#22`, `${HOME}#24`]);
+        expect(refs(nextList(board, { ...all, time: "1h" }))).toEqual([`${HOME}#11`, `${OTHER}#23`, `${HOME}#22`, `${HOME}#10`, `${HOME}#24`]);
+        expect(refs(nextList(board, { ...all, time: "half-day" }))).toContain(`${HOME}#12`);
+        expect(refs(nextList(board, { ...all, time: "half-day" }))).not.toContain(`${HOME}#20`);
     });
-    it("filters by the project's category", () => {
-        expect(numbers(nextList(board, { ...all, category: "personal" }))).toEqual([13, 11, 14]);
+    it("hides lab tasks at home", () => {
+        expect(refs(nextList(board, { ...all, place: "home" }))).not.toContain(`${HOME}#24`);
+    });
+    it("filters by the task's own area, falling back to its project's", () => {
+        expect(refs(nextList(board, { ...all, area: "Research" }))).toEqual([`${HOME}#11`, `${HOME}#10`, `${HOME}#24`, `${HOME}#12`]);
     });
 });
 
 describe("dueSoon", () => {
-    const dated: BoardItem[] = [
-        ...board,
-        item({ number: 20, parent: 3, status: "waiting", due: "2026-11-20" }),
-        item({ number: 21, parent: 2, status: "next", due: "2026-11-10" }),
-        item({ number: 22, parent: 1, status: "next", due: "2026-11-23" }),
-        item({ number: 23, parent: 1, status: "done", open: false, due: "2026-11-16" }),
-    ];
-    it("keeps open tasks overdue or due within 7 days, soonest first", () => {
-        expect(numbers(dueSoon(dated, "all", "2026-11-15"))).toEqual([21, 20]);
-        expect(numbers(dueSoon(dated, "all", "2026-11-16"))).toEqual([21, 20, 22]);
+    it("keeps open tasks due within 7 days, soonest first, then by repo and number", () => {
+        expect(refs(dueSoon(board, "all", "2026-11-15"))).toEqual([`${OTHER}#23`, `${HOME}#22`]);
+        expect(dueSoon(board, "all", "2026-11-12")).toEqual([]);
     });
-    it("filters by the project's category only", () => {
-        expect(numbers(dueSoon(dated, "degree", "2026-11-16"))).toEqual([20, 22]);
+    it("filters by area", () => {
+        expect(dueSoon(board, "Research", "2026-11-15")).toEqual([]);
     });
 });
