@@ -1,9 +1,9 @@
 <script lang="ts">
     import Card from "../components/Card.svelte";
-    import { board, categoryNames } from "../lib/board.svelte";
+    import { board, areaNames } from "../lib/board.svelte";
     import { dueSoon, nextList, PLACES, TIMES } from "../lib/next";
 
-    /** What can be done right now, built from the board when opened: segmented toggles (category, time, then place and backlog), tasks due soon, then one list of tasks, 5 at first. The toggles are remembered on this device. */
+    /** What can be done right now, built from the board when opened: segmented toggles (area, time, then place and backlog), tasks due soon, then one list of tasks, 5 at first. The toggles are remembered on this device. */
 
     // first rows of the list before "show more"
     const FIRST = 5;
@@ -24,30 +24,30 @@
         }
     }
 
-    let category = $state(load("category", "all"));
+    let area = $state(load("area", "all"));
     let time = $state(load("time", "any"));
     let place = $state(load("place", "lab"));
     let backlog = $state(load("backlog", "false") === "true");
     let expanded = $state(false);
-    $effect(() => save("category", category));
+    $effect(() => save("area", area));
     $effect(() => save("time", time));
     $effect(() => save("place", place));
     $effect(() => save("backlog", String(backlog)));
 
-    let categories = $derived(["all", ...categoryNames(board.items)]);
-    // a saved category that no longer exists falls back to all
-    let shownCategory = $derived(categories.includes(category) ? category : "all");
+    let areas = $derived(["all", ...areaNames(board.items)]);
+    // a saved area that no longer exists falls back to all
+    let shownArea = $derived(areas.includes(area) ? area : "all");
     const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
-    let due = $derived(dueSoon(board.items, shownCategory, today));
+    let due = $derived(dueSoon(board.items, shownArea, today));
     // tasks already under due soon are not repeated
-    let list = $derived(nextList(board.items, { time, place, category: shownCategory, backlog }).filter((t) => !due.includes(t)));
+    let list = $derived(nextList(board.items, { time, place, area: shownArea, backlog }).filter((t) => !due.includes(t)));
     let shown = $derived(expanded ? list : list.slice(0, FIRST));
 </script>
 
 <div class="toggles">
-    <div class="segmented" role="group" aria-label="category">
-        {#each categories as choice (choice)}
-            <button class:on={choice === shownCategory} aria-pressed={choice === shownCategory} onclick={() => (category = choice)}>{choice}</button>
+    <div class="segmented" role="group" aria-label="area">
+        {#each areas as choice (choice)}
+            <button class:on={choice === shownArea} aria-pressed={choice === shownArea} onclick={() => (area = choice)}>{choice}</button>
         {/each}
     </div>
     <div class="segmented" role="group" aria-label="time">

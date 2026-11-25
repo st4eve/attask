@@ -1,14 +1,14 @@
 <script lang="ts">
     import { slide } from "svelte/transition";
-    import Icon, { categoryIcon } from "./Icon.svelte";
-    import { board, categoryNames, openProjects } from "../lib/board.svelte";
+    import Icon, { areaIcon } from "./Icon.svelte";
+    import { board, areaNames, openProjects } from "../lib/board.svelte";
     import {
-        categoryHref,
+        areaHref,
         projectHref,
         router,
     } from "../lib/router.svelte";
 
-    let categories = $derived(categoryNames(board.items));
+    let areas = $derived(areaNames(board.items));
     let projects = $derived(openProjects(board.items));
     let expanded: Record<string, boolean> = $state({});
 </script>
@@ -17,16 +17,16 @@
     <a class="row" class:current={router.route.page === "inbox"} href="#/inbox"><Icon name="inbox" />inbox</a>
     <a class="row" class:current={router.route.page === "next"} href="#/next"><Icon name="next" />next</a>
 
-    <h4>categories</h4>
-    {#each categories as name}
+    <h4>areas</h4>
+    {#each areas as name}
         <div
             class="row"
-            class:current={router.route.page === "category" && router.route.name === name}
+            class:current={router.route.page === "area" && router.route.name === name}
         >
             <a
                 class="grow"
-                href={categoryHref(name)}
-               ><Icon name={categoryIcon(name)} />{name}</a
+                href={areaHref(name)}
+               ><Icon name={areaIcon(name)} />{name}</a
             >
             <button
                 class="chevron"
@@ -38,11 +38,11 @@
         </div>
         {#if expanded[name]}
             <div class="projects" transition:slide={{ duration: 200 }}>
-            {#each projects.filter((p) => p.category === name) as project}
+            {#each projects.filter((p) => p.area === name) as project (project.ref)}
                 <a
                     class="row sub"
-                    class:current={router.route.page === "project" && router.route.number === project.number}
-                    href={projectHref(project.number)}
+                    class:current={router.route.page === "project" && router.route.ref === project.ref}
+                    href={projectHref(project.ref)}
                    >{project.title}</a
                 >
             {/each}

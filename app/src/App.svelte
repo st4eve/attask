@@ -4,7 +4,7 @@
     import DetailSheet from "./components/DetailSheet.svelte";
     import BottomBar from "./components/BottomBar.svelte";
     import Sidebar from "./components/Sidebar.svelte";
-    import Category from "./pages/Category.svelte";
+    import Area from "./pages/Area.svelte";
     import Inbox from "./pages/Inbox.svelte";
     import Next from "./pages/Next.svelte";
     import Project from "./pages/Project.svelte";
@@ -30,10 +30,10 @@
     let title = $derived.by(() => {
         const route = router.route;
         switch (route.page) {
-            case "category":
+            case "area":
                 return route.name;
             case "project":
-                return board.items.find((i) => i.number === route.number && i.isProject)?.title ?? `project ${route.number}`;
+                return board.items.find((i) => i.ref === route.ref && i.isProject)?.title ?? route.ref;
             case "settings":
                 return "settings";
             case "next":
@@ -46,7 +46,7 @@
     // the open project's own status menu sits in the page head, so it stays at the right edge when a wide board scrolls sideways
     let headProject = $derived.by(() => {
         const route = router.route;
-        return route.page === "project" ? board.items.find((i) => i.number === route.number && i.isProject) : undefined;
+        return route.page === "project" ? board.items.find((i) => i.ref === route.ref && i.isProject) : undefined;
     });
 
     // pull down from the top of the page on a phone to reload the board
@@ -126,10 +126,10 @@
                     <Inbox />
                 {:else if router.route.page === "next"}
                     <Next />
-                {:else if router.route.page === "category"}
-                    <Category name={router.route.name} />
+                {:else if router.route.page === "area"}
+                    <Area name={router.route.name} />
                 {:else if router.route.page === "project"}
-                    <Project number={router.route.number} />
+                    <Project ref={router.route.ref} />
                 {/if}
             {/key}
         </div>

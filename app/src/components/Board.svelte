@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { BoardItem } from "../lib/api";
-    import { allowedStatuses } from "../../../worker/src/types";
+    import { allowedStatuses, statusSlug } from "../../../worker/src/types";
     import { board, changeStatus, drag } from "../lib/board.svelte";
     import Card from "./Card.svelte";
 
@@ -50,7 +50,7 @@
             data-status={status}
             role="group"
             aria-label={status}
-            style="--st: var(--st-{status})"
+            style="--st: var(--st-{statusSlug(status)})"
             class:refuses={drag.item !== null && drag.item.status !== status && !accepts(status)}
             class:over={over === status}
             ondragover={(e) => onDragOver(e, status)}

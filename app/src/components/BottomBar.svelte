@@ -1,24 +1,24 @@
 <script lang="ts">
-    import { board, categoryNames } from "../lib/board.svelte";
-    import { categoryHref, router } from "../lib/router.svelte";
-    import Icon, { categoryIcon, type IconName } from "./Icon.svelte";
+    import { board, areaNames } from "../lib/board.svelte";
+    import { areaHref, router } from "../lib/router.svelte";
+    import Icon, { areaIcon, type IconName } from "./Icon.svelte";
 
-    /** Floating pill at the bottom of a phone screen for moving between inbox, next, the categories and settings. The current page shows its name. Tapping a slot gives a haptic tick on iPhone. */
+    /** Floating pill at the bottom of a phone screen for moving between inbox, next, the Areas and settings. The current page shows its name. Tapping a slot gives a haptic tick on iPhone. */
 
-    let categories = $derived(categoryNames(board.items));
+    let areas = $derived(areaNames(board.items));
 
-    // a project page counts as its category
+    // a project page counts as its Area
     let current = $derived.by(() => {
         const route = router.route;
-        if (route.page === "category") return route.name;
-        if (route.page === "project") return board.items.find((i) => i.number === route.number)?.category ?? "";
+        if (route.page === "area") return route.name;
+        if (route.page === "project") return board.items.find((i) => i.ref === route.ref)?.area ?? "";
         return route.page;
     });
 
     let links: { id: string; icon: IconName; href: string }[] = $derived([
         { id: "inbox", icon: "inbox", href: "#/inbox" },
         { id: "next", icon: "next", href: "#/next" },
-        ...categories.map((name) => ({ id: name, icon: categoryIcon(name), href: categoryHref(name) })),
+        ...areas.map((name) => ({ id: name, icon: areaIcon(name), href: areaHref(name) })),
         { id: "settings", icon: "settings", href: "#/settings" },
     ]);
 </script>

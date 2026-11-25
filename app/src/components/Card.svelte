@@ -1,41 +1,43 @@
 <script lang="ts">
+    import { projectOf } from "../../../worker/src/types";
     import { board, drag, select, tasksOf } from "../lib/board.svelte";
+    import { HOME_REPO } from "../lib/api";
     import type { BoardItem } from "../lib/api";
     import { projectHref } from "../lib/router.svelte";
     import Icon from "./Icon.svelte";
     import PriorityMenu from "./PriorityMenu.svelte";
 
-    /** A project shows its priority and open task count and links to its page; a task shows kind, effort and due date and opens the detail sheet. The whole card is the link or button. Args: item: the card; compact: a task card showing only its project and due date chips, not draggable. */
+    /** A project shows its priority and open task count and links to its page; a task shows repo, lab, size, priority and due date and opens the detail sheet. The whole card is the link or button. Args: item: the card; compact: a task card showing only its project and due date chips, not draggable. */
     let { item, compact = false }: { item: BoardItem; compact?: boolean } = $props();
 
     // title of the task's project, only looked up for compact cards
-    let projectTitle = $derived(compact ? board.items.find((i) => i.isProject && i.number === item.parent)?.title : undefined);
+    let projectTitle = $derived(compact ? projectOf(board.items, item)?.title : undefined);
     // a drag is a move, so the browser shows no copy (+) cursor; a link inside the card would otherwise be dragged in its place, hence draggable="false" on them
     function onDragStart(e: DragEvent): void {
         drag.item = item;
         if (e.dataTransfer) {
             e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", String(item.number)); // Firefox only starts a drag that carries data
+            e.dataTransfer.setData("text/plain", item.ref); // Firefox only starts a drag that carries data
         }
     }
-    let taskCount = $derived(item.isProject ? tasksOf(board.items, item.number).length : 0);
+    let taskCount = $derived(item.isProject ? tasksOf(board.items, item.ref).length : 0);
 </script>
 
 <!-- inbox cards have no parent, so they stay put; compact cards are on Next, which has no columns -->
 <article
-    draggable={item.status !== "inbox" && !compact}
+    draggable={item.status !== "Inbox" && !compact}
     class:dragging={drag.item?.id === item.id}
     ondragstart={onDragStart}
     ondragend={() => (drag.item = null)}
 >
     <div class="top">
         {#if item.isProject}
-            <a class="title" href={projectHref(item.number)} draggable="false">{item.title}</a>
+            <a class="title" href={projectHref(item.ref)} draggable="false">{item.title}</a>
         {:else}
-            <button class="title" onclick={() => select(item.number)}>{item.title}</button>
+            <button class="title" onclick={() => select(item.ref)}>{item.title}</button>
         {/if}
         {#if item.isProject}
-            <a class="issue" href={item.url} target="_blank" rel="noopener" draggable="false" aria-label="open issue #{item.number}"><Icon name="link" size={1} /></a>
+            <a class="issue" href={item.url} target="_blank" rel="noopener" draggable="false" aria-label="open issue {item.ref}"><Icon name="link" size={1} /></a>
         {/if}
     </div>
     <div class="meta">
@@ -46,9 +48,10 @@
             <PriorityMenu {item} />
             <span class="chip">{taskCount} open</span>
         {:else}
-            {#if item.status === "inbox"}<span class="chip">#{item.number}</span>{/if}
-            {#if item.kind}<span class="chip">{item.kind}</span>{/if}
-            {#if item.effort}<span class="chip">{item.effort}</span>{/if}
+            {#if item.repo !== HOME_REPO}<span class="chip">{item.repo.split("/")[1]}</span>{/if}
+            {#if item.lab}<span class="chip">lab</span>{/if}
+            {#if item.size}<span class="chip">{item.size}</span>{/if}
+            {#if !item.isProject && item.priority}<span class="chip">{item.priority}</span>{/if}
             {#if item.due}<span class="chip due"><Icon name="calendar" size={0.9} />{item.due}</span>{/if}
         {/if}
     </div>

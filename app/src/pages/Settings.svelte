@@ -85,7 +85,7 @@
             <img src="{import.meta.env.BASE_URL}favicon.svg" alt="" />
             attask {version}
         </p>
-        <a class="repo" href="https://github.com/jewaniuk/attask" target="_blank" rel="noopener"><Icon name="github-logo" />source on GitHub</a>
+        <a class="repo" href="https://github.com/st4eve/attask" target="_blank" rel="noopener"><Icon name="github-logo" />source on GitHub</a>
     </section>
 </div>
 

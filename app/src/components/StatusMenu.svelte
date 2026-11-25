@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { allowedStatuses } from "../../../worker/src/types";
+    import { allowedStatuses, statusSlug } from "../../../worker/src/types";
     import type { BoardItem } from "../lib/api";
     import { board, changeStatus } from "../lib/board.svelte";
 
@@ -10,7 +10,7 @@
 </script>
 
 <!-- the pill shows the status as plain text so it fits the word; the real select sits invisibly on top and opens the system picker -->
-<label class="pill" style="--st: var(--st-{item.status})">
+<label class="pill" style="--st: var(--st-{statusSlug(item.status ?? "")})">
     {item.status}
     <select value={item.status} aria-label="status" onchange={(e) => changeStatus(item, e.currentTarget.value)}>
         {#each options as status}

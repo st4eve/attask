@@ -9,28 +9,27 @@
     let tasks = $derived(inboxTasks(board.items));
 
     let prompt = $derived(
-        `Triage my inbox in jewaniuk/tasks (board #4). Inbox issues: ${tasks.map((t) => `#${t.number}`).join(", ")}.\n\n` +
-            "Follow the tasks repo's CLAUDE.md: for each issue, infer its parent project (or propose a new one), Kind and Effort, show one compact proposal, and ask me to confirm before changing anything.\n\n" +
-            "Notes:\n- ",
+        "Triage my inbox on the task_planner board (GitHub Project st4eve #2) with the MyLife planner skill. For each Inbox item (refs like owner/name#n): set Area, Size and Priority, set Status to To do or Backlog, and add it as a sub-issue of a `project` issue if it belongs to one.",
     );
 
     let list: HTMLElement | undefined = $state();
     /** Whether the add-task pop-up is showing. */
     let open = $state(false);
     /** Tasks just created that the board does not list yet: GitHub adds a new issue to the board a few seconds after creating it. */
-    let pending: { key: number; number: number | null; title: string }[] = $state([]);
+    let pending: { key: number; ref: string | null; title: string }[] = $state([]);
     let nextKey = 0;
 
     /** Creates a task, shows it as pending at once (so the slot the pop-up held does not jump), then reloads the board until it appears. */
-    async function add(text: string): Promise<void> {
-        const row = { key: nextKey++, number: null as number | null, title: text };
+    async function add(text: string, repo: string): Promise<void> {
+        const row = { key: nextKey++, ref: null as string | null, title: text };
         pending.push(row);
         const mine = pending[pending.length - 1];
         try {
-            const { number } = await postTask(text);
-            mine.number = number;
+            const { number } = await postTask(text, repo);
+            const ref = `${repo}#${number}`;
+            mine.ref = ref;
             board.error = "";
-            for (let i = 0; i < 6 && !board.items.some((t) => t.number === number); i++) {
+            for (let i = 0; i < 6 && !board.items.some((t) => t.ref === ref); i++) {
                 await new Promise((r) => setTimeout(r, 2500));
                 await loadBoard();
             }
@@ -46,7 +45,7 @@
     <!-- while the pop-up is open it floats over this empty slot, and the cards wait below it -->
     {#if open}<div class="slot"></div>{/if}
     {#each pending as p (p.key)}
-        <div class="pending">{#if p.number}<span>#{p.number}</span>{/if}{p.title}</div>
+        <div class="pending">{#if p.ref}<span>{p.ref}</span>{/if}{p.title}</div>
     {/each}
     {#each tasks as item (item.id)}
         <Card {item} />
