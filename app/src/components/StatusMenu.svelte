@@ -10,6 +10,7 @@
 </script>
 
 <!-- the pill shows the status as plain text so it fits the word; the real select sits invisibly on top and opens the system picker -->
+<!-- ?? "" because an item with no status still renders (neutral colour) -->
 <label class="pill" style="--st: var(--st-{statusSlug(item.status ?? "")})">
     {item.status}
     <select value={item.status} aria-label="status" onchange={(e) => changeStatus(item, e.currentTarget.value)}>

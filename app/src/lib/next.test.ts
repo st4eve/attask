@@ -91,5 +91,22 @@ describe("dueSoon", () => {
     });
     it("filters by area", () => {
         expect(dueSoon(board, "Research", "2026-11-15")).toEqual([]);
+        expect(refs(dueSoon(board, "Course", "2026-11-15"))).toEqual([`${OTHER}#23`, `${HOME}#22`]);
+    });
+    it("includes the 7th day and overdue tasks, and leaves out day 8", () => {
+        expect(refs(dueSoon(board, "all", "2026-11-13"))).toEqual([`${OTHER}#23`, `${HOME}#22`]);
+        expect(dueSoon(board, "all", "2026-11-12")).toEqual([]);
+        expect(refs(dueSoon(board, "all", "2026-12-31"))).toEqual([`${OTHER}#23`, `${HOME}#22`]);
+    });
+});
+
+describe("area of a task that differs from its project's", () => {
+    const mixed: BoardItem[] = [
+        item({ number: 1, isProject: true, status: "In progress", area: "Research" }),
+        item({ number: 2, parent: `${HOME}#1`, status: "To do", area: "Personal" }),
+    ];
+    it("uses the task's own area, not its project's", () => {
+        expect(refs(nextList(mixed, { ...all, area: "Personal" }))).toEqual([`${HOME}#2`]);
+        expect(nextList(mixed, { ...all, area: "Research" })).toEqual([]);
     });
 });

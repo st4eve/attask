@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import page from './fixtures/board-page.json';
-import { parsePage, resolveOption } from '../src/github';
+import { GithubError, fetchDetail, parsePage, resolveOption } from '../src/github';
 
 describe('parsePage', () => {
 	const parsed = parsePage(page);
@@ -46,5 +46,23 @@ describe('resolveOption', () => {
 
 	it('names a missing field', () => {
 		expect(() => resolveOption(fields, 'Size', 'XS')).toThrow('board has no Size field');
+	});
+});
+
+describe('github errors', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('turns a graphql errors payload into a GithubError', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => Response.json({ errors: [{ message: 'bad scope' }, { message: 'other' }] })));
+		const err = await fetchDetail('placeholder', 'example/repo', 1).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(GithubError);
+		expect((err as GithubError).message).toBe('github returned: bad scope; other');
+	});
+
+	it('turns a non-ok graphql response into a GithubError', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => Response.json({ message: 'Bad credentials' }, { status: 401 })));
+		const err = await fetchDetail('placeholder', 'example/repo', 1).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(GithubError);
+		expect((err as GithubError).message).toBe('github returned 401: Bad credentials');
 	});
 });

@@ -46,9 +46,11 @@ async function send<T>(settings: Settings, path: string, body?: object, method: 
     throw new Error(`can't reach ${base} (wrong address, worker not running, or origin not in ALLOWED_ORIGINS)`);
   }
   if (res.status === 401) throw new Error("the app key is wrong");
-  // 409 is a board rule saying no, with its reason
-  if (res.status === 409) throw new Error(((await res.json()) as { error: string }).error);
-  if (!res.ok) throw new Error(`worker returned ${res.status}`);
+  if (!res.ok) {
+    // the worker explains a refusal or failure as {error}; fall back to the status if the body isn't that
+    const reason = ((await res.json().catch(() => null)) as { error?: string } | null)?.error;
+    throw new Error(reason ?? `worker returned ${res.status}`);
+  }
   return res.status === 204 ? (undefined as T) : res.json();
 }
 

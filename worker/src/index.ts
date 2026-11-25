@@ -1,5 +1,5 @@
 import { REPOS } from './config';
-import { closeNotPlanned, createTask, deleteIssue, fetchBoard, fetchDetail, writePriority, writeStatuses } from './github';
+import { BoardShapeError, GithubError, closeNotPlanned, createTask, deleteIssue, fetchBoard, fetchDetail, writePriority, writeStatuses } from './github';
 import { parseIssuePath } from './paths';
 import { checkDelete, checkNotPlanned, planPriority, planStatus } from './rules';
 import { makeRef } from './types';
@@ -25,6 +25,8 @@ async function readJson(request: Request): Promise<Record<string, unknown> | nul
 async function route(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
 
+	// an unset key would make `Bearer undefined` a valid login
+	if (!env.APP_KEY) return Response.json({ error: 'worker not configured' }, { status: 500 });
 	if (request.headers.get('Authorization') !== `Bearer ${env.APP_KEY}`) {
 		return new Response('unauthorized', { status: 401 });
 	}
@@ -102,16 +104,14 @@ export default {
 		const allowed = env.ALLOWED_ORIGINS.split(',').includes(origin);
 
 		// the browser sends an OPTIONS "preflight" first because of the Authorization header
-		// a missing board field or option, or github refusing a write, is a refusal the app shows, not a crash
+		// a missing board field or option, or github refusing a write, is a refusal the app shows; anything else is a fixed 500 so no detail leaks
 		const res =
 			request.method === 'OPTIONS'
 				? new Response(null, { status: 204 })
 				: await route(request, env).catch((e: unknown) => {
-						const message = e instanceof Error ? e.message : String(e);
-						if (message.startsWith('board has no') || message.startsWith('github returned')) {
-							return Response.json({ error: message }, { status: 409 });
-						}
-						throw e;
+						if (e instanceof GithubError || e instanceof BoardShapeError) return Response.json({ error: e.message }, { status: 409 });
+						console.error('unhandled error', e instanceof Error ? e.name : 'unknown');
+						return Response.json({ error: 'internal error' }, { status: 500 });
 					});
 
 		const out = new Response(res.body, res); // copy so the headers can be changed

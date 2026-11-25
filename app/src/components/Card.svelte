@@ -1,8 +1,7 @@
 <script lang="ts">
     import { projectOf } from "../../../worker/src/types";
     import { board, drag, select, tasksOf } from "../lib/board.svelte";
-    import { HOME_REPO } from "../lib/api";
-    import type { BoardItem } from "../lib/api";
+    import { HOME_REPO, type BoardItem } from "../lib/api";
     import { projectHref } from "../lib/router.svelte";
     import Icon from "./Icon.svelte";
     import PriorityMenu from "./PriorityMenu.svelte";
@@ -51,7 +50,7 @@
             {#if item.repo !== HOME_REPO}<span class="chip">{item.repo.split("/")[1]}</span>{/if}
             {#if item.lab}<span class="chip">lab</span>{/if}
             {#if item.size}<span class="chip">{item.size}</span>{/if}
-            {#if !item.isProject && item.priority}<span class="chip">{item.priority}</span>{/if}
+            {#if item.priority}<span class="chip">{item.priority}</span>{/if}
             {#if item.due}<span class="chip due"><Icon name="calendar" size={0.9} />{item.due}</span>{/if}
         {/if}
     </div>

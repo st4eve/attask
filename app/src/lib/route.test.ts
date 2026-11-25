@@ -15,3 +15,10 @@ describe("parseRoute", () => {
         expect(parseRoute("#/project/notaref")).toEqual({ page: "inbox" });
     });
 });
+
+describe("parseRoute malformed encoding", () => {
+    it("falls back to the inbox instead of throwing", () => {
+        expect(parseRoute("#/area/%E0")).toEqual({ page: "inbox" });
+        expect(parseRoute("#/project/%E0%A4%A")).toEqual({ page: "inbox" });
+    });
+});

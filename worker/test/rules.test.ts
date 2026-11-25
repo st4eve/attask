@@ -64,7 +64,17 @@ describe('allowedStatuses', () => {
 	});
 });
 
+describe('allowedStatuses on a paused project', () => {
+	it('lets a task of a paused project take only the paused status or Done', () => {
+		const paused = board.map((i) => (i.ref === 'st4eve/MyLife#1' ? { ...i, status: 'Backlog' } : i));
+		expect(allowedStatuses(paused[2], paused)).toEqual(['Backlog', 'Done']);
+	});
+});
+
 describe('planStatus', () => {
+	it('refuses a missing item', () => {
+		expect(planStatus(board, 'nope', 'Done')).toEqual({ ok: false, reason: 'no such item' });
+	});
 	it('changes one task', () => {
 		expect(planStatus(board, id('st4eve/MyLife', 10), 'In progress')).toEqual({
 			ok: true,
@@ -88,6 +98,13 @@ describe('planStatus', () => {
 });
 
 describe('planPriority', () => {
+	it('does nothing when the priority is the same', () => {
+		const set = board.map((i) => (i.ref === 'st4eve/MyLife#21' ? { ...i, priority: 'P1' } : i));
+		expect(planPriority(set, id('st4eve/MyLife', 21), 'P1')).toEqual({ ok: true, write: null });
+	});
+	it('refuses a missing item', () => {
+		expect(planPriority(board, 'nope', 'P1')).toEqual({ ok: false, reason: 'no such item' });
+	});
 	it('sets a task priority too', () => {
 		expect(planPriority(board, id('st4eve/MyLife', 21), 'P1')).toEqual({
 			ok: true,
@@ -113,6 +130,15 @@ describe('checkDelete', () => {
 });
 
 describe('checkNotPlanned', () => {
+	it('allows an inbox task the viewer cannot delete, but not one they can (that is deleted)', () => {
+		expect(checkNotPlanned(board[8])).toBeNull();
+		expect(checkNotPlanned(board[6])).toBe('only open, triaged tasks can be closed as not planned');
+	});
+	it('refuses a closed task and a missing one', () => {
+		expect(checkNotPlanned(board[4])).toBe('only open, triaged tasks can be closed as not planned');
+		expect(checkNotPlanned(undefined)).toBe('only open, triaged tasks can be closed as not planned');
+		expect(checkNotPlanned({ ...board[8], open: false })).toBe('only open, triaged tasks can be closed as not planned');
+	});
 	it('allows an open, triaged task and refuses inbox items and projects', () => {
 		expect(checkNotPlanned(board[7])).toBeNull();
 		expect(checkNotPlanned(board[6])).toBe('only open, triaged tasks can be closed as not planned');

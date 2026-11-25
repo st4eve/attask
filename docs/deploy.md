@@ -4,7 +4,7 @@ Two parts, deployed separately: the app (static files) on GitHub Pages, and the 
 
 ## Check the token
 
-The Worker's token must be a **classic** token with the `repo` and `project` scopes. Because `st4eve` owns the repos in `REPOS`, `repo` already gives admin there, which `DELETE /issues/<n>` needs. The board is project #2 of `st4eve`; add the `Backlog` option to the board's Status field once. To check without printing the token:
+The Worker's token must be a **classic** token with the `repo` and `project` scopes. `REPOS` includes repos in the `QNLQueens` and `Shastri-Lab` orgs, so the token needs Issues read/write on each of them (a classic `repo` token covers this where you are a member; a fine-grained token must list each repo, and an org may need to approve it first). Admin rights are only needed for `DELETE /issues/<owner>/<repo>/<n>`, so deleting works only in repos you admin; elsewhere inbox tasks are closed as not planned. To check without printing the token:
 
 ```
 read -s "T?token: "
@@ -15,6 +15,10 @@ unset T
 
 Expect `repo` and `project` in the first output and `"admin": true` in the second.
 
+## Board setup
+
+The board is project #2 of `st4eve`. Add the `Backlog` option to the board's Status field once.
+
 ## Cloudflare Worker
 
 1. Make a free Cloudflare account at dash.cloudflare.com. No domain or card is needed; the Worker gets a free `*.workers.dev` address.
@@ -24,6 +28,10 @@ Expect `repo` and `project` in the first output and `"admin": true` in the secon
    - `npx wrangler secret put GITHUB_TOKEN`
    - `npx wrangler secret put APP_KEY` (any long random string, for example from `openssl rand -base64 32`; keep a copy for the phone)
 5. Check it is up: `curl -i https://attask-worker.<subdomain>.workers.dev/board` should answer `401`, not an error page.
+
+To regenerate the Worker's types (`npm run cf-typegen`) you need a local `worker/.dev.vars` file (git-ignored, copy `.dev.vars.example`); the command reads the secret names from it.
+
+Some actions write in several steps (a status change that pauses a project's tasks, closing an issue and then setting Done). If one fails part-way, retrying the same action is safe: the Worker re-reads the board and only changes what still differs. The exception is creating a task: if it fails after the issue exists, a retry makes a second issue, so check the repo first.
 
 `ALLOWED_ORIGINS` is not a secret and is already in `wrangler.jsonc`, set to `https://st4eve.github.io`. It is an origin, so no path and no trailing slash.
 

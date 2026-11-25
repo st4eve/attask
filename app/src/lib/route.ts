@@ -11,7 +11,12 @@ export type Route =
 /** Turns a hash such as `#/project/st4eve%2FMyLife%2312` into a route. Unknown or malformed hashes give the inbox. */
 export function parseRoute(hash: string): Route {
     const [page, ...rest] = hash.replace(/^#\/?/, "").split("/");
-    const arg = decodeURIComponent(rest.join("/"));
+    let arg: string;
+    try {
+        arg = decodeURIComponent(rest.join("/"));
+    } catch {
+        return { page: "inbox" }; // a malformed percent-encoding is not a page
+    }
     if (page === "next" || page === "settings") return { page };
     if (page === "area" && arg) return { page, name: arg };
     if (page === "project" && parseRef(arg)) return { page, ref: arg };

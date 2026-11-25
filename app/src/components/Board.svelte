@@ -20,7 +20,9 @@
 
     // a column takes the dragged card if the board rules allow its status and it is not the card's own column
     function accepts(status: string): boolean {
-        return drag.item !== null && drag.item.status !== status && allowedStatuses(drag.item, board.items).includes(status);
+        const dragged = drag.item;
+        // a card from another list (e.g. a flat task on an area page) can't be dropped here
+        return dragged !== null && items.some((i) => i.id === dragged.id) && dragged.status !== status && allowedStatuses(dragged, board.items).includes(status);
     }
 
     function onDragOver(e: DragEvent, status: string): void {

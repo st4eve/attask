@@ -6,7 +6,7 @@
     import PriorityMenu from "./PriorityMenu.svelte";
     import StatusMenu from "./StatusMenu.svelte";
 
-    /** Pop-up for the task in `board.selected`: a bottom sheet on a phone, a centred panel on desktop. Shows the status menu (not for an inbox task), the issue body and its comments, fetched when it opens. */
+    /** Pop-up for the task in `board.selected`: a bottom sheet on a phone, a centred panel on desktop. Shows the status menu (not for an inbox task), the issue body and its comments, fetched when it opens, and a trash button: an inbox task in a repo the token admins is deleted for good, anything else is closed as not planned. */
     let dialog: HTMLDialogElement;
 
     let item = $derived(board.items.find((i) => i.ref === board.selected && !i.isProject));
@@ -60,7 +60,6 @@
             {#if item.repo !== HOME_REPO}<span class="chip">{item.repo.split("/")[1]}</span>{/if}
             {#if item.lab}<span class="chip">lab</span>{/if}
             {#if item.size}<span class="chip">{item.size}</span>{/if}
-            {#if item.priority}<span class="chip">{item.priority}</span>{/if}
             {#if item.due}<span class="chip"><Icon name="calendar" size={0.9} />{item.due}</span>{/if}
             <a class="issue" href={item.url} target="_blank" rel="noopener"><Icon name="link" size={1} />{item.ref}</a>
             <!-- an inbox task is deleted for good; a triaged one is closed as not planned -->

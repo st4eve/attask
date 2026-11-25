@@ -18,23 +18,40 @@ export interface Board {
 
 const HEADERS = (token: string) => ({ Authorization: `Bearer ${token}`, 'User-Agent': 'attask-worker' });
 
-/** Runs one GraphQL request against GitHub and returns its `data`. Throws if GitHub reports errors. */
+/** GitHub refused a request or reported errors. The message is GitHub's reason and never holds the token. */
+export class GithubError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'GithubError';
+	}
+}
+
+/** The board lacks a field or option the Worker needs, so a write was refused before it was sent. */
+export class BoardShapeError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'BoardShapeError';
+	}
+}
+
+/** Runs one GraphQL request against GitHub and returns its `data`. Throws a `GithubError` if the request fails or GitHub reports errors. */
 async function graphql(token: string, query: string, variables: Record<string, unknown>): Promise<any> {
 	const res = await fetch('https://api.github.com/graphql', {
 		method: 'POST',
 		headers: HEADERS(token),
 		body: JSON.stringify({ query, variables }),
 	});
-	const json: any = await res.json();
-	if (json.errors) throw new Error(JSON.stringify(json.errors));
+	const json: any = await res.json().catch(() => null);
+	if (!res.ok) throw new GithubError(`github returned ${res.status}: ${json?.message ?? res.statusText}`);
+	if (json?.errors) throw new GithubError(`github returned: ${json.errors.map((e: { message: string }) => e.message).join('; ')}`);
 	return json.data;
 }
 
-/** Runs one REST request against GitHub. Throws GitHub's message if it refuses. */
+/** Runs one REST request against GitHub. Throws a `GithubError` with GitHub's message if it refuses. */
 async function rest(token: string, method: string, path: string, body?: object): Promise<any> {
 	const res = await fetch(`https://api.github.com${path}`, { method, headers: HEADERS(token), body: body ? JSON.stringify(body) : undefined });
-	const json: any = res.status === 204 ? null : await res.json();
-	if (!res.ok) throw new Error(`github returned ${res.status}: ${json?.message ?? ''}`);
+	const json: any = res.status === 204 ? null : await res.json().catch(() => null);
+	if (!res.ok) throw new GithubError(`github returned ${res.status}: ${json?.message ?? res.statusText}`);
 	return json;
 }
 
@@ -133,13 +150,13 @@ export function parsePage(data: any): { projectId: string; fields: BoardField[];
  * 	The field id and option id.
  *
  * Raises:
- * 	Error `board has no <field> field` or `board has no <field> option "<option>"`.
+ * 	BoardShapeError `board has no <field> field` or `board has no <field> option "<option>"`.
  */
 export function resolveOption(fields: BoardField[], field: string, option: string): { fieldId: string; optionId: string } {
 	const f = fields.find((x) => x.name === field);
-	if (!f) throw new Error(`board has no ${field} field`);
+	if (!f) throw new BoardShapeError(`board has no ${field} field`);
 	const o = f.options.find((x) => x.name === option);
-	if (!o) throw new Error(`board has no ${field} option "${option}"`);
+	if (!o) throw new BoardShapeError(`board has no ${field} option "${option}"`);
 	return { fieldId: f.id, optionId: o.id };
 }
 

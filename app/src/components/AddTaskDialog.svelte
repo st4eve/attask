@@ -105,6 +105,23 @@
     input:focus {
         outline: none;
     }
+    label {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        flex-shrink: 0;
+        font-size: 0.85em;
+        color: var(--muted);
+    }
+    select {
+        max-width: 9rem;
+        font: inherit;
+        color: var(--text);
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.2em 0.3em;
+    }
     button {
         display: inline-flex;
         align-items: center;

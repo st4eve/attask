@@ -32,9 +32,9 @@ export function openProjects(items: BoardItem[]): BoardItem[] {
     return items.filter((i) => i.isProject && i.open);
 }
 
-/** Area names that have an open project or an open, triaged flat task, sorted. */
+/** Area names that have an open project or an open, triaged flat task, sorted. A task whose parent is not on the board counts as flat, as in `flatTasksIn`. */
 export function areaNames(items: BoardItem[]): string[] {
-    const names = items.filter((i) => i.open && (i.isProject || (i.parent === null && i.status !== "Inbox"))).map((i) => i.area);
+    const names = items.filter((i) => i.open && (i.isProject || (!projectOf(items, i) && i.status !== "Inbox"))).map((i) => i.area);
     return [...new Set(names.filter((n): n is string => n !== null))].sort();
 }
 

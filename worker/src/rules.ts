@@ -95,7 +95,7 @@ export function checkDelete(item: BoardItem | undefined): string | null {
 }
 
 /**
- * Checks that an issue may be closed as not planned: an open, triaged task (inbox tasks are deleted instead, projects are never dropped from attask).
+ * Checks that an issue may be closed as not planned: an open task that is triaged, or an inbox task the token cannot delete (an inbox task it can delete is deleted instead). Projects are never dropped from attask.
  *
  * Args:
  * 	item: The board item, undefined if the issue is not on the board.
@@ -104,7 +104,7 @@ export function checkDelete(item: BoardItem | undefined): string | null {
  * 	null if allowed, else the reason to refuse.
  */
 export function checkNotPlanned(item: BoardItem | undefined): string | null {
-	if (!item || !item.open || item.isProject || item.status === 'Inbox') {
+	if (!item || !item.open || item.isProject || (item.status === 'Inbox' && item.canDelete)) {
 		return 'only open, triaged tasks can be closed as not planned';
 	}
 	return null;

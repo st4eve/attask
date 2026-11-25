@@ -8,14 +8,13 @@
     /** Open tasks still in the inbox, read-only: an agent triages them. The button opens Claude with a triage prompt for these issues already filled in, where it can be edited before sending. */
     let tasks = $derived(inboxTasks(board.items));
 
-    let prompt = $derived(
-        "Triage my inbox on the task_planner board (GitHub Project st4eve #2) with the MyLife planner skill. For each Inbox item (refs like owner/name#n): set Area, Size and Priority, set Status to To do or Backlog, and add it as a sub-issue of a `project` issue if it belongs to one.",
-    );
+    const prompt =
+        "Triage my inbox on the task_planner board (GitHub Project st4eve #2) with the MyLife planner skill. For each Inbox item (refs like owner/name#n): set Area, Size and Priority, set Status to To do or Backlog, and add it as a sub-issue of a `project` issue if it belongs to one.";
 
     let list: HTMLElement | undefined = $state();
     /** Whether the add-task pop-up is showing. */
     let open = $state(false);
-    /** Tasks just created that the board does not list yet: GitHub adds a new issue to the board a few seconds after creating it. */
+    /** Tasks just created that the board does not list yet: the Worker adds a new issue to the board, but the app's copy of the board is only refreshed by loading it. */
     let pending: { key: number; ref: string | null; title: string }[] = $state([]);
     let nextKey = 0;
 
@@ -29,6 +28,7 @@
             const ref = `${repo}#${number}`;
             mine.ref = ref;
             board.error = "";
+            await loadBoard();
             for (let i = 0; i < 6 && !board.items.some((t) => t.ref === ref); i++) {
                 await new Promise((r) => setTimeout(r, 2500));
                 await loadBoard();
