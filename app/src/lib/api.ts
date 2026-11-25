@@ -1,5 +1,6 @@
-import type { BoardItem, ItemDetail } from "../../../worker/src/types";
+import { parseRef, type BoardItem, type ItemDetail } from "../../../worker/src/types";
 export type { BoardItem, ItemDetail };
+export { HOME_REPO, REPOS } from "../../../worker/src/config";
 
 /** Worker connection settings, kept in localStorage on this device. */
 export interface Settings {
@@ -45,9 +46,11 @@ async function send<T>(settings: Settings, path: string, body?: object, method: 
     throw new Error(`can't reach ${base} (wrong address, worker not running, or origin not in ALLOWED_ORIGINS)`);
   }
   if (res.status === 401) throw new Error("the app key is wrong");
-  // 409 is a board rule saying no, with its reason
-  if (res.status === 409) throw new Error(((await res.json()) as { error: string }).error);
-  if (!res.ok) throw new Error(`worker returned ${res.status}`);
+  if (!res.ok) {
+    // the worker explains a refusal or failure as {error}; fall back to the status if the body isn't that
+    const reason = ((await res.json().catch(() => null)) as { error?: string } | null)?.error;
+    throw new Error(reason ?? `worker returned ${res.status}`);
+  }
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
@@ -70,8 +73,15 @@ export function clearSettings(): void {
 /** One Status the Worker changed, which may include tasks paused along with a project. */
 export interface StatusWrite {
   id: string;
-  number: number;
+  ref: string;
   status: string;
+}
+
+/** The Worker path of an issue, e.g. `owner/name#3` → `/issues/owner/name/3`. Throws on a malformed ref. */
+export function issuePath(ref: string): string {
+  const parsed = parseRef(ref);
+  if (!parsed) throw new Error(`bad ref ${ref}`);
+  return `/issues/${parsed.repo}/${parsed.number}`;
 }
 
 /** Fetches every board item from the Worker. */
@@ -80,8 +90,8 @@ export function fetchBoard(): Promise<BoardItem[]> {
 }
 
 /** Fetches an issue's body and comments as HTML. */
-export function fetchDetail(number: number): Promise<ItemDetail> {
-  return request(`/issues/${number}/detail`);
+export function fetchDetail(ref: string): Promise<ItemDetail> {
+  return request(`${issuePath(ref)}/detail`);
 }
 
 /** Asks the Worker to set an item's status. Returns every status it changed. Throws the board rule's reason if it refuses. */
@@ -89,22 +99,22 @@ export async function postStatus(id: string, status: string): Promise<StatusWrit
   return (await request<{ writes: StatusWrite[] }>(`/items/${id}/status`, { status })).writes;
 }
 
-/** Asks the Worker to create a task with this title. It lands in the inbox on the board a few seconds later. Returns the new issue's number and address. */
-export function postTask(title: string): Promise<{ number: number; url: string }> {
-  return request("/tasks", { title });
+/** Asks the Worker to create a task in a repo; it lands in the board's Inbox. Returns the new issue's number and address. */
+export function postTask(title: string, repo: string): Promise<{ number: number; url: string }> {
+  return request("/tasks", { title, repo });
 }
 
 /** Asks the Worker to permanently delete an inbox task's issue. Throws the Worker's reason if it refuses. */
-export function deleteTask(number: number): Promise<void> {
-  return request(`/issues/${number}`, undefined, "DELETE");
+export function deleteTask(ref: string): Promise<void> {
+  return request(issuePath(ref), undefined, "DELETE");
 }
 
 /** Asks the Worker to close a triaged task's issue as not planned. Throws the Worker's reason if it refuses. */
-export function closeTaskNotPlanned(number: number): Promise<void> {
-  return request(`/issues/${number}/not-planned`, {});
+export function closeTaskNotPlanned(ref: string): Promise<void> {
+  return request(`${issuePath(ref)}/not-planned`, {});
 }
 
-/** Asks the Worker to set a project's priority. Throws the board rule's reason if it refuses. */
+/** Asks the Worker to set an item's priority. Throws the board rule's reason if it refuses. */
 export async function postPriority(id: string, priority: string): Promise<void> {
   await request(`/items/${id}/priority`, { priority });
 }

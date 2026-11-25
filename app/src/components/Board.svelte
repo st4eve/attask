@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { BoardItem } from "../lib/api";
-    import { allowedStatuses } from "../../../worker/src/types";
+    import { allowedStatuses, statusSlug } from "../../../worker/src/types";
     import { board, changeStatus, drag } from "../lib/board.svelte";
     import Card from "./Card.svelte";
 
@@ -20,7 +20,9 @@
 
     // a column takes the dragged card if the board rules allow its status and it is not the card's own column
     function accepts(status: string): boolean {
-        return drag.item !== null && drag.item.status !== status && allowedStatuses(drag.item, board.items).includes(status);
+        const dragged = drag.item;
+        // a card from another list (e.g. a flat task on an area page) can't be dropped here
+        return dragged !== null && items.some((i) => i.id === dragged.id) && dragged.status !== status && allowedStatuses(dragged, board.items).includes(status);
     }
 
     function onDragOver(e: DragEvent, status: string): void {
@@ -50,7 +52,7 @@
             data-status={status}
             role="group"
             aria-label={status}
-            style="--st: var(--st-{status})"
+            style="--st: var(--st-{statusSlug(status)})"
             class:refuses={drag.item !== null && drag.item.status !== status && !accepts(status)}
             class:over={over === status}
             ondragover={(e) => onDragOver(e, status)}

@@ -1,6 +1,6 @@
 # attask
 
-Mobile-first web app (PWA, installable on the home screen) for viewing and editing the user's personal task board: GitHub Project #4 of `jewaniuk/tasks`. Tracked as issue #22 in `jewaniuk/tasks`; the `plan` comment there is the build plan, `docs/decisions.md` in that repo has the rationale. The board's data model and rules are in `~/tasks/CLAUDE.md`.
+Mobile-first web app (PWA, installable on the home screen) for viewing and editing the user's task board: GitHub Project #2 ("task_planner") of user `st4eve`, which holds issues from several repos. The design is `docs/superpowers/specs/2026-11-25-task-planner-board-design.md`. Owner-specific values are in `worker/src/config.ts`.
 
 The repo is public and holds no board data. Never commit tokens, keys or real task content.
 
@@ -9,7 +9,7 @@ The repo is public and holds no board data. Never commit tokens, keys or real ta
 Two independent packages, no npm workspaces. Run npm commands inside each. `tools/` holds phone testing helpers (Playwright, USB iPhone inspector), see `docs/mobile-testing.md` and the `phone-test` skill; it is not part of the gate. `tools/make-icons.mjs` redraws the app icons. Deploy steps: `docs/deploy.md`.
 
 - `app/` Vite + Svelte 5 + TypeScript, plain CSS, hash router. Deployed to GitHub Pages.
-- `worker/` Cloudflare Worker. Holds the GitHub token, exposes a few board actions, applies the board rules. `src/types.ts` is imported by the app too, so keep it free of Worker-only code.
+- `worker/` Cloudflare Worker. Holds the GitHub token, exposes a few board actions, applies the board rules. `src/types.ts` and `src/config.ts` are imported by the app too, so keep it free of Worker-only code.
 
 ## Run
 
@@ -25,13 +25,13 @@ Local secrets live in `worker/.dev.vars` (git-ignored, copy `.dev.vars.example`)
 Run before every PR. All must pass.
 
 - `cd app && npm run check`
-- `cd app && npx vitest run` (unit tests cover the Next page's pure filters in `src/lib/next.ts`)
+- `cd app && npx vitest run` (unit tests cover `next.ts`, `route.ts` and `issuePath`)
 - `cd worker && npm run cf-typegen && npx tsc --noEmit`
-- `cd worker && npx vitest run --passWithNoTests` (unit tests cover `src/rules.ts` only, added in checkpoint 3)
+- `cd worker && npx vitest run --passWithNoTests` (unit tests cover `rules.ts`, `paths.ts` and `github.ts` parsing)
 
 ## Workflow
 
-Agent mode: branch, implement one checkpoint, open a PR, never push to or commit on `main`, never merge. The user reviews and squash-merges. Follow the PR format in `~/.claude/CLAUDE.md`.
+Agent mode: branch, implement one checkpoint, land by PR into the fork's `main` (`gh repo set-default st4eve/attask` first), never push to or commit on `main`, never merge; never push to or open PRs against `jewaniuk/attask`. The user reviews and squash-merges. Follow the PR format in `~/.claude/CLAUDE.md`.
 
 Work in checkpoints, one PR each. At the end of each, the PR's "needs you" lists what to try on desktop and on the phone, and the user's feedback steers the next one.
 
@@ -45,7 +45,7 @@ The user is learning web app design by conversation. Before implementing each ch
 
 ## Safety
 
-The Worker's token is a classic token with write access to `jewaniuk/tasks` and board #4. Until checkpoint 3 the app only reads. From checkpoint 3 on, test every write on a throwaway project and its tasks created for the test, never on real ones, and delete them afterwards. Never put a token or app key in a command that gets logged, a commit, or an issue comment.
+The Worker's token is a classic token (`repo` + `project`) with write access to the repos in `REPOS` and board #2. Test every write on a throwaway issue titled `attask test – delete me` in `st4eve/MyLife`, never on real items, and delete it afterwards. Never put a token or app key in a command that gets logged, a commit, or an issue comment.
 
 ## Code style
 

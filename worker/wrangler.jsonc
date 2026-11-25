@@ -12,7 +12,7 @@
 	},
 	"upload_source_maps": true,
 	// plain config, safe to commit; GITHUB_TOKEN and APP_KEY are secrets set with `wrangler secret put`
-	"vars": { "ALLOWED_ORIGINS": "https://jewaniuk.github.io" }
+	"vars": { "ALLOWED_ORIGINS": "https://st4eve.github.io" }
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

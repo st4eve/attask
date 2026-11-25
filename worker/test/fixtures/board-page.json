@@ -1,0 +1,76 @@
+{
+	"user": {
+		"projectV2": {
+			"id": "PVT_test",
+			"fields": {
+				"nodes": [
+					{ "id": "F_title", "name": "Title" },
+					{
+						"id": "F_status",
+						"name": "Status",
+						"options": [
+							{ "id": "o_inbox", "name": "Inbox" },
+							{ "id": "o_todo", "name": "To do" },
+							{ "id": "o_prog", "name": "In progress" },
+							{ "id": "o_wait", "name": "Waiting" },
+							{ "id": "o_done", "name": "Done" }
+						]
+					},
+					{ "id": "F_prio", "name": "Priority", "options": [{ "id": "o_p0", "name": "P0" }, { "id": "o_p1", "name": "P1" }, { "id": "o_p2", "name": "P2" }] },
+					{ "id": "F_area", "name": "Area", "options": [{ "id": "o_res", "name": "Research" }] }
+				]
+			},
+			"items": {
+				"pageInfo": { "hasNextPage": true, "endCursor": "CUR1" },
+				"nodes": [
+					{
+						"id": "PVTI_a",
+						"updatedAt": "2026-11-01T00:00:00Z",
+						"fieldValues": { "nodes": [
+							{ "name": "In progress", "field": { "name": "Status" } },
+							{ "name": "Research", "field": { "name": "Area" } },
+							{ "name": "P1", "field": { "name": "Priority" } },
+							{}
+						] },
+						"content": {
+							"number": 3, "title": "example project", "url": "https://github.com/st4eve/MyLife/issues/3", "state": "OPEN",
+							"repository": { "nameWithOwner": "st4eve/MyLife", "viewerPermission": "ADMIN" },
+							"labels": { "nodes": [{ "name": "project" }] },
+							"parent": null,
+							"issueDependenciesSummary": { "blockedBy": 0 }
+						}
+					},
+					{
+						"id": "PVTI_b",
+						"updatedAt": "2026-11-02T00:00:00Z",
+						"fieldValues": { "nodes": [
+							{ "name": "To do", "field": { "name": "Status" } },
+							{ "name": "S", "field": { "name": "Size" } },
+							{ "date": "2026-12-01", "field": { "name": "Due" } }
+						] },
+						"content": {
+							"number": 3, "title": "example task", "url": "https://github.com/Shastri-Lab/polymerNN/issues/3", "state": "OPEN",
+							"repository": { "nameWithOwner": "Shastri-Lab/polymerNN", "viewerPermission": "WRITE" },
+							"labels": { "nodes": [{ "name": "lab" }] },
+							"parent": { "number": 3, "repository": { "nameWithOwner": "st4eve/MyLife" } },
+							"issueDependenciesSummary": { "blockedBy": 1 }
+						}
+					},
+					{
+						"id": "PVTI_c",
+						"updatedAt": "2026-11-03T00:00:00Z",
+						"fieldValues": { "nodes": [{ "name": "Inbox", "field": { "name": "Status" } }] },
+						"content": {
+							"number": 9, "title": "example inbox item", "url": "https://github.com/st4eve/MyLife/issues/9", "state": "OPEN",
+							"repository": { "nameWithOwner": "st4eve/MyLife", "viewerPermission": "ADMIN" },
+							"labels": { "nodes": [] },
+							"parent": null,
+							"issueDependenciesSummary": { "blockedBy": 0 }
+						}
+					},
+					{ "id": "PVTI_draft", "updatedAt": "2026-11-04T00:00:00Z", "fieldValues": { "nodes": [] }, "content": {} }
+				]
+			}
+		}
+	}
+}

@@ -2,25 +2,25 @@
     import Board from "../components/Board.svelte";
     import Icon from "../components/Icon.svelte";
     import { board, tasksOf } from "../lib/board.svelte";
-    import { categoryHref } from "../lib/router.svelte";
+    import { areaHref } from "../lib/router.svelte";
 
-    /** Kanban of one project's open tasks by status, with a link back to its category. */
-    let { number }: { number: number } = $props();
+    /** Kanban of one project's open tasks by status, with a link back to its Area. */
+    let { ref }: { ref: string } = $props();
 
-    let project = $derived(board.items.find((i) => i.number === number && i.isProject));
-    // phone starts on the column matching the project's own status: backlog, waiting, else doing
-    let start = $derived(project?.status === "backlog" || project?.status === "waiting" ? project.status : "doing");
+    let project = $derived(board.items.find((i) => i.ref === ref && i.isProject));
+    // phone starts on the column matching the project's own status: Backlog, Waiting, else In progress
+    let start = $derived(project?.status === "Backlog" || project?.status === "Waiting" ? project.status : "In progress");
 </script>
 
 {#if project}
-    {#if project.category}
-        <a class="back" href={categoryHref(project.category)}><Icon name="chevron" size={0.9} />{project.category}</a>
+    {#if project.area}
+        <a class="back" href={areaHref(project.area)}><Icon name="chevron" size={0.9} />{project.area}</a>
     {/if}
 {/if}
 {#if project}
-    <Board statuses={["backlog", "next", "doing", "waiting"]} items={tasksOf(board.items, number)} {start} />
+    <Board statuses={["Backlog", "To do", "In progress", "Waiting"]} items={tasksOf(board.items, ref)} {start} />
 {:else if board.items.length > 0}
-    <p>no project #{number} on the board</p>
+    <p>no project {ref}</p>
 {/if}
 
 <style>

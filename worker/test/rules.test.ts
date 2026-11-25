@@ -1,100 +1,147 @@
 import { describe, expect, it } from 'vitest';
-import { planPriority, planStatus } from '../src/rules';
-import type { BoardItem } from '../src/types';
+import { checkDelete, checkNotPlanned, planPriority, planStatus } from '../src/rules';
+import { allowedStatuses, makeRef, parseRef, statusSlug, type BoardItem } from '../src/types';
 
-function item(over: Partial<BoardItem>): BoardItem {
+function item(over: Partial<BoardItem> & { repo?: string; number: number }): BoardItem {
+	const repo = over.repo ?? 'st4eve/MyLife';
 	return {
-		id: `id${over.number}`,
-		number: 0,
+		id: `id-${repo}-${over.number}`,
+		repo,
+		ref: makeRef(repo, over.number),
 		title: 't',
 		url: '',
 		open: true,
 		isProject: false,
 		parent: null,
 		status: null,
-		category: null,
+		area: null,
 		priority: null,
-		kind: null,
-		effort: null,
+		size: null,
+		lab: false,
 		due: null,
 		updatedAt: '',
 		blocked: false,
+		canDelete: true,
 		...over,
 	};
 }
 
-const board: BoardItem[] = [
-	item({ number: 1, isProject: true, status: 'doing' }),
-	item({ number: 2, isProject: true, status: 'backlog' }),
-	item({ number: 10, parent: 1, status: 'next' }),
-	item({ number: 11, parent: 1, status: 'doing' }),
-	item({ number: 12, parent: 1, status: 'done', open: false }),
-	item({ number: 13, parent: 2, status: 'backlog' }),
-	item({ number: 20, status: 'inbox' }),
-];
+const OTHER = 'QNLQueens/WickedIdeas';
 
-const numbers = (p: ReturnType<typeof planStatus>) => (p.ok ? p.writes.map((w) => w.number) : []);
+// a project in each repo, both numbered 1, and tasks numbered 10 in each
+const board: BoardItem[] = [
+	item({ number: 1, isProject: true, status: 'In progress' }),
+	item({ number: 1, repo: OTHER, isProject: true, status: 'In progress' }),
+	item({ number: 10, parent: 'st4eve/MyLife#1', status: 'To do' }),
+	item({ number: 11, parent: 'st4eve/MyLife#1', status: 'In progress' }),
+	item({ number: 12, parent: 'st4eve/MyLife#1', status: 'Done', open: false }),
+	item({ number: 10, repo: OTHER, parent: `${OTHER}#1`, status: 'To do' }),
+	item({ number: 20, status: 'Inbox' }),
+	item({ number: 21, status: 'To do' }),
+	item({ number: 22, repo: OTHER, status: 'Inbox', canDelete: false }),
+];
+const id = (repo: string, n: number) => `id-${repo}-${n}`;
+const refs = (p: ReturnType<typeof planStatus>) => (p.ok ? p.writes.map((w) => w.ref) : []);
+
+describe('refs', () => {
+	it('round-trips repos with dots and dashes', () => {
+		expect(parseRef('Shastri-Lab/polymerNN#7')).toEqual({ repo: 'Shastri-Lab/polymerNN', number: 7 });
+		expect(parseRef('a.b/c-d.e#12')).toEqual({ repo: 'a.b/c-d.e', number: 12 });
+		expect(parseRef('no-hash')).toBeNull();
+	});
+	it('slugs status names for css', () => {
+		expect(statusSlug('In progress')).toBe('in-progress');
+		expect(statusSlug('To do')).toBe('to-do');
+	});
+});
+
+describe('allowedStatuses', () => {
+	it('keeps inbox items in the inbox', () => {
+		expect(allowedStatuses(board[6], board)).toEqual(['Inbox']);
+	});
+	it('lets a flat task take any status but Inbox', () => {
+		expect(allowedStatuses(board[7], board)).toEqual(['Backlog', 'To do', 'In progress', 'Waiting', 'Done']);
+	});
+});
+
+describe('allowedStatuses on a paused project', () => {
+	it('lets a task of a paused project take only the paused status or Done', () => {
+		const paused = board.map((i) => (i.ref === 'st4eve/MyLife#1' ? { ...i, status: 'Backlog' } : i));
+		expect(allowedStatuses(paused[2], paused)).toEqual(['Backlog', 'Done']);
+	});
+});
 
 describe('planStatus', () => {
+	it('refuses a missing item', () => {
+		expect(planStatus(board, 'nope', 'Done')).toEqual({ ok: false, reason: 'no such item' });
+	});
 	it('changes one task', () => {
-		expect(planStatus(board, 'id10', 'doing')).toEqual({ ok: true, writes: [{ id: 'id10', number: 10, status: 'doing' }] });
+		expect(planStatus(board, id('st4eve/MyLife', 10), 'In progress')).toEqual({
+			ok: true,
+			writes: [{ id: id('st4eve/MyLife', 10), ref: 'st4eve/MyLife#10', status: 'In progress' }],
+		});
 	});
 	it('does nothing when the status is the same', () => {
-		expect(planStatus(board, 'id10', 'next')).toEqual({ ok: true, writes: [] });
+		expect(planStatus(board, id('st4eve/MyLife', 10), 'To do')).toEqual({ ok: true, writes: [] });
 	});
-	it('pauses open tasks when a project goes to waiting', () => {
-		expect(numbers(planStatus(board, 'id1', 'waiting'))).toEqual([1, 10, 11]);
+	it('pauses only the open tasks of that project, not a same-numbered project in another repo', () => {
+		expect(refs(planStatus(board, id('st4eve/MyLife', 1), 'Waiting'))).toEqual(['st4eve/MyLife#1', 'st4eve/MyLife#10', 'st4eve/MyLife#11']);
 	});
-	it('skips tasks already at the new status', () => {
-		expect(numbers(planStatus(board, 'id2', 'backlog'))).toEqual([]);
+	it('refuses moving a task back to Inbox, naming it by ref', () => {
+		expect(planStatus(board, id('st4eve/MyLife', 21), 'Inbox')).toEqual({ ok: false, reason: "st4eve/MyLife#21 can't be Inbox here" });
 	});
-	it('does not cascade on doing or done', () => {
-		expect(numbers(planStatus(board, 'id1', 'done'))).toEqual([1]);
-		expect(numbers(planStatus(board, 'id2', 'doing'))).toEqual([2]);
-	});
-	it('lets a task of a paused project only match it or be done', () => {
-		expect(planStatus(board, 'id13', 'next').ok).toBe(false);
-		expect(planStatus(board, 'id13', 'doing').ok).toBe(false);
-		expect(planStatus(board, 'id13', 'waiting').ok).toBe(false);
-		expect(planStatus(board, 'id13', 'done').ok).toBe(true);
-		expect(planStatus(board, 'id13', 'backlog')).toEqual({ ok: true, writes: [] });
-	});
-	it('refuses statuses that do not fit the kind', () => {
-		expect(planStatus(board, 'id1', 'next').ok).toBe(false);
-		expect(planStatus(board, 'id1', 'inbox').ok).toBe(false);
-		expect(planStatus(board, 'id10', 'bogus').ok).toBe(false);
-	});
-	it('keeps inbox for items without a parent', () => {
-		expect(planStatus(board, 'id20', 'next').ok).toBe(false);
-		expect(planStatus(board, 'id10', 'inbox').ok).toBe(false);
-	});
-	it('refuses an unknown item', () => {
-		expect(planStatus(board, 'nope', 'done').ok).toBe(false);
+	it('refuses a task status other than the paused project status or Done', () => {
+		const paused = board.map((i) => (i.ref === 'st4eve/MyLife#1' ? { ...i, status: 'Backlog' } : i));
+		expect(planStatus(paused, id('st4eve/MyLife', 10), 'In progress').ok).toBe(false);
+		expect(planStatus(paused, id('st4eve/MyLife', 10), 'Done').ok).toBe(true);
 	});
 });
 
 describe('planPriority', () => {
-	const projects: BoardItem[] = [
-		item({ number: 1, isProject: true, priority: '!!' }),
-		item({ number: 2, isProject: true, priority: null }),
-		item({ number: 10, parent: 1, status: 'next' }),
-	];
-	it('changes a project priority', () => {
-		expect(planPriority(projects, 'id1', '!!!')).toEqual({ ok: true, write: { id: 'id1', number: 1, priority: '!!!' } });
-	});
-	it('sets a priority on a project that has none', () => {
-		expect(planPriority(projects, 'id2', '-')).toEqual({ ok: true, write: { id: 'id2', number: 2, priority: '-' } });
-	});
 	it('does nothing when the priority is the same', () => {
-		expect(planPriority(projects, 'id1', '!!')).toEqual({ ok: true, write: null });
+		const set = board.map((i) => (i.ref === 'st4eve/MyLife#21' ? { ...i, priority: 'P1' } : i));
+		expect(planPriority(set, id('st4eve/MyLife', 21), 'P1')).toEqual({ ok: true, write: null });
 	});
-	it('refuses a task', () => {
-		expect(planPriority(projects, 'id10', '!').ok).toBe(false);
+	it('refuses a missing item', () => {
+		expect(planPriority(board, 'nope', 'P1')).toEqual({ ok: false, reason: 'no such item' });
+	});
+	it('sets a task priority too', () => {
+		expect(planPriority(board, id('st4eve/MyLife', 21), 'P1')).toEqual({
+			ok: true,
+			write: { id: id('st4eve/MyLife', 21), ref: 'st4eve/MyLife#21', priority: 'P1' },
+		});
 	});
 	it('refuses an unknown priority', () => {
-		expect(planPriority(projects, 'id1', 'urgent').ok).toBe(false);
+		expect(planPriority(board, id('st4eve/MyLife', 21), '!!!')).toEqual({ ok: false, reason: '!!! is not a priority' });
 	});
-	it('refuses an unknown item', () => {
-		expect(planPriority(projects, 'nope', '!').ok).toBe(false);
+});
+
+describe('checkDelete', () => {
+	it('allows an inbox task in a repo the viewer admins', () => {
+		expect(checkDelete(board[6])).toBeNull();
+	});
+	it('refuses an inbox task in a repo the viewer does not admin', () => {
+		expect(checkDelete(board[8])).toBe('only inbox tasks in repos you admin can be deleted');
+	});
+	it('refuses a triaged task and a missing one', () => {
+		expect(checkDelete(board[7])).toBe('only inbox tasks in repos you admin can be deleted');
+		expect(checkDelete(undefined)).toBe('only inbox tasks in repos you admin can be deleted');
+	});
+});
+
+describe('checkNotPlanned', () => {
+	it('allows an inbox task the viewer cannot delete, but not one they can (that is deleted)', () => {
+		expect(checkNotPlanned(board[8])).toBeNull();
+		expect(checkNotPlanned(board[6])).toBe('only open, triaged tasks can be closed as not planned');
+	});
+	it('refuses a closed task and a missing one', () => {
+		expect(checkNotPlanned(board[4])).toBe('only open, triaged tasks can be closed as not planned');
+		expect(checkNotPlanned(undefined)).toBe('only open, triaged tasks can be closed as not planned');
+		expect(checkNotPlanned({ ...board[8], open: false })).toBe('only open, triaged tasks can be closed as not planned');
+	});
+	it('allows an open, triaged task and refuses inbox items and projects', () => {
+		expect(checkNotPlanned(board[7])).toBeNull();
+		expect(checkNotPlanned(board[6])).toBe('only open, triaged tasks can be closed as not planned');
+		expect(checkNotPlanned(board[0])).toBe('only open, triaged tasks can be closed as not planned');
 	});
 });

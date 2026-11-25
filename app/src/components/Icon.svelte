@@ -29,9 +29,10 @@
     /** Names accepted by `Icon`. */
     export type IconName = keyof typeof shapes;
 
-    /** The icon for a board category, a folder for any category without its own. */
-    export function categoryIcon(category: string): IconName {
-        return category === "degree" || category === "personal" || category === "start-up" ? category : "folder";
+    /** The icon for a board Area, a folder for any other. */
+    export function areaIcon(area: string): IconName {
+        const icons: Record<string, IconName> = { Course: "degree", Research: "next", Personal: "personal", Admin: "settings" };
+        return icons[area] ?? "folder";
     }
 </script>
 

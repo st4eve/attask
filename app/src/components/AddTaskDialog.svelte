@@ -1,16 +1,18 @@
 <script lang="ts">
+    import { HOME_REPO, REPOS } from "../lib/api";
     import Icon from "./Icon.svelte";
 
-    /** Title box that opens over the slot where the new task will land: the top of `anchor`, the task list, with the rest of the screen dimmed. Enter or the plus button hands the title to `onsubmit` and closes it; the x, Escape or a tap outside cancels. Args: open: whether it is showing (bindable); anchor: the list element to sit on top of; onsubmit: called with the trimmed, non-empty title. */
+    /** Title box that opens over the slot where the new task will land: the top of `anchor`, the task list, with the rest of the screen dimmed. Enter or the plus button hands the title to `onsubmit` and closes it; the x, Escape or a tap outside cancels. Args: open: whether it is showing (bindable); anchor: the list element to sit on top of; onsubmit: called with the trimmed, non-empty title and the chosen repo. */
     let {
         open = $bindable(false),
         anchor,
         onsubmit,
-    }: { open: boolean; anchor: HTMLElement | undefined; onsubmit: (title: string) => void } = $props();
+    }: { open: boolean; anchor: HTMLElement | undefined; onsubmit: (title: string, repo: string) => void } = $props();
 
     let dialog: HTMLDialogElement;
     let input: HTMLInputElement;
     let title = $state("");
+    let repo = $state(HOME_REPO);
 
     $effect(() => {
         if (open && !dialog.open) {
@@ -32,7 +34,7 @@
         const text = title.trim();
         if (!text) return;
         open = false;
-        onsubmit(text);
+        onsubmit(text, repo);
     }
 </script>
 
@@ -42,6 +44,12 @@
 <dialog bind:this={dialog} onclose={() => (open = false)} onclick={(e) => e.target === dialog && (open = false)}>
     <form onsubmit={submit}>
         <input bind:this={input} bind:value={title} placeholder="new task" aria-label="new task title" enterkeyhint="send" />
+        <label>
+            repo
+            <select bind:value={repo}>
+                {#each REPOS as r (r)}<option value={r}>{r}</option>{/each}
+            </select>
+        </label>
         <button class="go" aria-label="add task" disabled={!title.trim()}><Icon name="plus" size={1.3} /></button>
         <button type="button" class="cancel" aria-label="cancel" onclick={() => (open = false)}><Icon name="close" size={1.1} /></button>
     </form>
@@ -96,6 +104,23 @@
     }
     input:focus {
         outline: none;
+    }
+    label {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        flex-shrink: 0;
+        font-size: 0.85em;
+        color: var(--muted);
+    }
+    select {
+        max-width: 9rem;
+        font: inherit;
+        color: var(--text);
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.2em 0.3em;
     }
     button {
         display: inline-flex;

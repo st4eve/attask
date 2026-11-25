@@ -3,7 +3,7 @@
     import type { BoardItem } from "../lib/api";
     import { changePriority } from "../lib/board.svelte";
 
-    /** Chip showing a project's priority; tapping it opens the system picker to change it. A project without a priority shows "none". */
+    /** Chip showing an item's priority (project or task); tapping it opens the system picker to change it. An item without a priority shows "none". */
     let { item }: { item: BoardItem } = $props();
 
     // chip colour, one of --pr-1 (!!!) to --pr-4 (- or none)
