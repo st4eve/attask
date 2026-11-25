@@ -4,8 +4,8 @@ import { PAUSED_STATUSES as PAUSED, PRIORITIES, allowedStatuses, type BoardItem 
 export interface StatusWrite {
 	/** project item id */
 	id: string;
-	/** issue number, for the log and for closing when the status is `done` */
-	number: number;
+	/** `owner/name#n`, for messages and for closing the issue when the status is `Done` */
+	ref: string;
 	status: string;
 }
 
@@ -16,7 +16,7 @@ export type Plan = { ok: true; writes: StatusWrite[] } | { ok: false; reason: st
 export interface PriorityWrite {
 	/** project item id */
 	id: string;
-	number: number;
+	ref: string;
 	priority: string;
 }
 
@@ -28,12 +28,12 @@ function find(items: BoardItem[], id: string): BoardItem | undefined {
 }
 
 /**
- * Plans a Status change, applying the board rules from `~/tasks/CLAUDE.md`.
+ * Plans a Status change, applying the board rules.
  *
  * Args:
  * 	items: The whole board.
  * 	id: Project item id of the item to change.
- * 	status: The requested status.
+ * 	status: The requested status, a board option name.
  *
  * Returns:
  * 	The writes to make (the item itself, plus its open tasks when a project is paused), empty if nothing changes; or a refusal with the reason.
@@ -43,16 +43,16 @@ export function planStatus(items: BoardItem[], id: string, status: string): Plan
 	if (!item) return { ok: false, reason: 'no such item' };
 
 	if (!allowedStatuses(item, items).includes(status)) {
-		return { ok: false, reason: `#${item.number} can't be ${status} here` };
+		return { ok: false, reason: `${item.ref} can't be ${status} here` };
 	}
 
 	const writes: StatusWrite[] = [];
-	if (item.status !== status) writes.push({ id: item.id, number: item.number, status });
+	if (item.status !== status) writes.push({ id: item.id, ref: item.ref, status });
 
 	if (item.isProject && PAUSED.includes(status)) {
 		for (const task of items) {
-			if (task.open && !task.isProject && task.parent === item.number && task.status !== status) {
-				writes.push({ id: task.id, number: task.number, status });
+			if (task.open && !task.isProject && task.parent === item.ref && task.status !== status) {
+				writes.push({ id: task.id, ref: task.ref, status });
 			}
 		}
 	}
@@ -60,21 +60,52 @@ export function planStatus(items: BoardItem[], id: string, status: string): Plan
 }
 
 /**
- * Plans a Priority change. Only projects have a priority.
+ * Plans a Priority change, for a project or a task.
  *
  * Args:
  * 	items: The whole board.
- * 	id: Project item id of the project to change.
+ * 	id: Project item id of the item to change.
  * 	priority: The requested priority, one of `PRIORITIES`.
  *
  * Returns:
- * 	The write to make, null if the project already has that priority; or a refusal with the reason.
+ * 	The write to make, null if the item already has that priority; or a refusal with the reason.
  */
 export function planPriority(items: BoardItem[], id: string, priority: string): PriorityPlan {
 	const item = find(items, id);
 	if (!item) return { ok: false, reason: 'no such item' };
-	if (!item.isProject) return { ok: false, reason: `#${item.number} is a task, only projects have a priority` };
 	if (!PRIORITIES.includes(priority)) return { ok: false, reason: `${priority} is not a priority` };
 	if (item.priority === priority) return { ok: true, write: null };
-	return { ok: true, write: { id: item.id, number: item.number, priority } };
+	return { ok: true, write: { id: item.id, ref: item.ref, priority } };
+}
+
+/**
+ * Checks that an issue may be permanently deleted: an inbox task in a repo the token admins.
+ *
+ * Args:
+ * 	item: The board item, undefined if the issue is not on the board.
+ *
+ * Returns:
+ * 	null if allowed, else the reason to refuse.
+ */
+export function checkDelete(item: BoardItem | undefined): string | null {
+	if (!item || item.isProject || item.status !== 'Inbox' || !item.canDelete) {
+		return 'only inbox tasks in repos you admin can be deleted';
+	}
+	return null;
+}
+
+/**
+ * Checks that an issue may be closed as not planned: an open, triaged task (inbox tasks are deleted instead, projects are never dropped from attask).
+ *
+ * Args:
+ * 	item: The board item, undefined if the issue is not on the board.
+ *
+ * Returns:
+ * 	null if allowed, else the reason to refuse.
+ */
+export function checkNotPlanned(item: BoardItem | undefined): string | null {
+	if (!item || !item.open || item.isProject || item.status === 'Inbox') {
+		return 'only open, triaged tasks can be closed as not planned';
+	}
+	return null;
 }
