@@ -6,7 +6,7 @@
     import PriorityMenu from "./PriorityMenu.svelte";
     import StatusMenu from "./StatusMenu.svelte";
 
-    /** Pop-up for the task in `board.selected`: a bottom sheet on a phone, a centred panel on desktop. Shows the status menu (not for an inbox task), the issue body and its comments, fetched when it opens, and a trash button: an inbox task in a repo the token admins is deleted for good, anything else is closed as not planned. */
+    /** Pop-up for the task in `board.selected`: a bottom sheet on a phone, a centred panel on desktop. Shows the status menu, the issue body and its comments, fetched when it opens, and a trash button: an inbox task in a repo the token admins is deleted for good, anything else is closed as not planned. */
     let dialog: HTMLDialogElement;
 
     let item = $derived(board.items.find((i) => i.ref === board.selected && !i.isProject));
@@ -54,8 +54,7 @@
             <button class="close" aria-label="close" disabled={board.busy} onclick={() => select(null)}>×</button>
         </header>
         <div class="controls">
-            <!-- inbox tasks are triaged by an agent, so they have no status menu here -->
-            {#if item.status !== "Inbox"}<StatusMenu {item} />{/if}
+            <StatusMenu {item} />
             <PriorityMenu {item} />
             {#if item.repo !== HOME_REPO}<span class="chip">{item.repo.split("/")[1]}</span>{/if}
             {#if item.lab}<span class="chip">lab</span>{/if}

@@ -56,8 +56,8 @@ describe('refs', () => {
 });
 
 describe('allowedStatuses', () => {
-	it('keeps inbox items in the inbox', () => {
-		expect(allowedStatuses(board[6], board)).toEqual(['Inbox']);
+	it('lets an inbox item stay or move to any task status', () => {
+		expect(allowedStatuses(board[6], board)).toEqual(['Inbox', 'Backlog', 'To do', 'In progress', 'Waiting', 'Done']);
 	});
 	it('lets a flat task take any status but Inbox', () => {
 		expect(allowedStatuses(board[7], board)).toEqual(['Backlog', 'To do', 'In progress', 'Waiting', 'Done']);
