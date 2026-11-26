@@ -1,5 +1,5 @@
 import { OWNER, PROJECT_NUMBER } from './config';
-import type { PriorityWrite, StatusWrite } from './rules';
+import type { FieldWrite, ParentWrite, PriorityWrite, StatusWrite } from './rules';
 import { makeRef, parseRef, type BoardItem, type ItemDetail } from './types';
 
 /** A single-select field of the board with its options. */
@@ -222,6 +222,49 @@ export async function writePriority(token: string, board: Board, write: Priority
 }
 
 /**
+ * Sets Area and Size on one item, one request per field.
+ *
+ * Args:
+ * 	token: GitHub token.
+ * 	board: The board, to resolve ids.
+ * 	writes: The changes from `planFields`.
+ */
+export async function writeFields(token: string, board: Board, writes: FieldWrite[]): Promise<void> {
+	for (const w of writes) resolveOption(board.fields, w.field, w.option); // refuse before writing anything
+	for (const field of ['Area', 'Size'] as const) {
+		await setOptions(token, board, field, writes.filter((w) => w.field === field).map((w) => ({ id: w.id, option: w.option })));
+	}
+}
+
+// the GraphQL node id of an issue, which mutations take instead of owner/name#n
+async function issueNodeId(token: string, ref: string): Promise<string> {
+	const { repo, number } = parseRef(ref)!;
+	const [owner, name] = repo.split('/');
+	const found = await graphql(token, 'query($o: String!, $r: String!, $n: Int!) { repository(owner: $o, name: $r) { issue(number: $n) { id } } }', {
+		o: owner,
+		r: name,
+		n: number,
+	});
+	return found.repository.issue.id;
+}
+
+/**
+ * Adds a task as a sub-issue of a project. GitHub allows the two to be in different repos of the same owner.
+ *
+ * Args:
+ * 	token: GitHub token.
+ * 	write: The link from `planParent`.
+ */
+export async function addSubIssue(token: string, write: ParentWrite): Promise<void> {
+	const parent = await issueNodeId(token, write.parent);
+	const child = await issueNodeId(token, write.ref);
+	await graphql(token, 'mutation($parent: ID!, $child: ID!) { addSubIssue(input: { issueId: $parent, subIssueId: $child }) { issue { number } } }', {
+		parent,
+		child,
+	});
+}
+
+/**
  * Fetches an issue's body and comments, rendered to HTML by GitHub.
  *
  * Args:
@@ -277,13 +320,8 @@ export async function createTask(token: string, board: Board, repo: string, titl
  * 	number: Issue number.
  */
 export async function deleteIssue(token: string, repo: string, number: number): Promise<void> {
-	const [owner, name] = repo.split('/');
-	const found = await graphql(token, 'query($o: String!, $r: String!, $n: Int!) { repository(owner: $o, name: $r) { issue(number: $n) { id } } }', {
-		o: owner,
-		r: name,
-		n: number,
-	});
-	await graphql(token, 'mutation($id: ID!) { deleteIssue(input: { issueId: $id }) { clientMutationId } }', { id: found.repository.issue.id });
+	const id = await issueNodeId(token, makeRef(repo, number));
+	await graphql(token, 'mutation($id: ID!) { deleteIssue(input: { issueId: $id }) { clientMutationId } }', { id });
 }
 
 /**

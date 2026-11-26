@@ -1,7 +1,19 @@
 import { REPOS } from './config';
-import { BoardShapeError, GithubError, closeNotPlanned, createTask, deleteIssue, fetchBoard, fetchDetail, writePriority, writeStatuses } from './github';
+import {
+	BoardShapeError,
+	GithubError,
+	addSubIssue,
+	closeNotPlanned,
+	createTask,
+	deleteIssue,
+	fetchBoard,
+	fetchDetail,
+	writeFields,
+	writePriority,
+	writeStatuses,
+} from './github';
 import { parseIssuePath } from './paths';
-import { checkDelete, checkNotPlanned, planPriority, planStatus } from './rules';
+import { checkDelete, checkNotPlanned, planFields, planParent, planPriority, planStatus } from './rules';
 import { makeRef } from './types';
 
 /**
@@ -83,6 +95,33 @@ async function route(request: Request, env: Env): Promise<Response> {
 		if (!plan.ok) return Response.json({ error: plan.reason }, { status: 409 });
 		if (plan.write) await writePriority(env.GITHUB_TOKEN, board, plan.write);
 		return Response.json({ priority: plan.write?.priority ?? null });
+	}
+
+	const fields = url.pathname.match(/^\/items\/([\w-]+)\/fields$/);
+	if (request.method === 'POST' && fields) {
+		const body = await readJson(request);
+		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
+		// a key that is absent or not a string leaves that field alone
+		const change = {
+			area: typeof body.area === 'string' ? body.area : undefined,
+			size: typeof body.size === 'string' ? body.size : undefined,
+		};
+		const board = await fetchBoard(env.GITHUB_TOKEN);
+		const plan = planFields(board.items, board.fields, fields[1], change);
+		if (!plan.ok) return Response.json({ error: plan.reason }, { status: 409 });
+		await writeFields(env.GITHUB_TOKEN, board, plan.writes);
+		return Response.json({ writes: plan.writes });
+	}
+
+	const link = url.pathname.match(/^\/items\/([\w-]+)\/parent$/);
+	if (request.method === 'POST' && link) {
+		const body = await readJson(request);
+		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
+		const board = await fetchBoard(env.GITHUB_TOKEN);
+		const plan = planParent(board.items, link[1], String(body.parent));
+		if (!plan.ok) return Response.json({ error: plan.reason }, { status: 409 });
+		if (plan.write) await addSubIssue(env.GITHUB_TOKEN, plan.write);
+		return Response.json({ parent: plan.write?.parent ?? null });
 	}
 
 	if (request.method === 'POST' && url.pathname === '/tasks') {
