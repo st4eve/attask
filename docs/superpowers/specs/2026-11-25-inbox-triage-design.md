@@ -1,7 +1,7 @@
 # Inbox triage in the Worker
 
 Date: 2026-11-25
-Status: draft, awaiting review
+Status: approved, implemented on spec/inbox-triage
 
 ## Goal
 
@@ -27,7 +27,7 @@ Out of scope:
 
 All routes keep the existing conventions: Bearer `APP_KEY`, CORS from `ALLOWED_ORIGINS`, `GithubError` and `BoardShapeError` become 409, anything else 500. Field and option ids are resolved by name on each request.
 
-`POST /triage`, no body. Returns `{ proposals: Proposal[] }`.
+`POST /triage`, no body. Returns `{ proposals: Proposal[]; options: { area: string[]; size: string[]; priority: string[] } }`. `options` lists the board's option names so the review list's menus can offer them.
 
 - Fetches the board, takes `inboxTasks` (open, non-project items with Status `Inbox`). If there are none, returns `{ proposals: [] }` without calling Claude.
 - Sends Claude what it needs and nothing more (section 2), gets structured output, validates it (section 2), returns the valid proposals.
@@ -48,14 +48,14 @@ All routes keep the existing conventions: Bearer `APP_KEY`, CORS from `ALLOWED_O
 
 `POST /items/<id>/fields`, body `{ area?: string; size?: string }`.
 
-- New `planFields(items, board, id, change)` in `rules.ts`: refuses if the item is missing or closed, or if a value is not an option of that field. Returns the writes that change something (none if both match).
+- New `planFields(items, fields, id, change)` in `rules.ts`: refuses if the item is missing or closed, or if a value is not an option of that field. Returns the writes that change something (none if both match).
 - New `writeFields(token, board, write)` in `github.ts`, using the existing `setOptions`.
 
 `POST /items/<id>/parent`, body `{ parent: string }` (a ref).
 
-- New `planParent(items, id, parent)` in `rules.ts`: refuses if the item is missing, closed, a project, or already has a parent; or if `parent` is not an open `project` issue on the board.
-- New `addSubIssue(token, item, parent)` in `github.ts`: looks up both issues' node ids, then calls GitHub's `addSubIssue` mutation. A sub-issue in another repo of the same owner is allowed by GitHub.
-- After linking, if the project is paused, the task's allowed statuses narrow. The app applies the parent before the status (section 3), and `planStatus` already enforces the rule, so a proposal that conflicts gets a 409 with the reason, not a silent wrong write.
+- New `planParent(items, id, parent)` in `rules.ts`: refuses if the item is missing, closed, a project, or already has a parent; or if `parent` is not an open `project` issue on the board. Asking for the parent the item already has is a no-op, so a row whose later writes failed can be applied again.
+- New `addSubIssue(token, write)` in `github.ts`: looks up both issues' node ids, then calls GitHub's `addSubIssue` mutation. A sub-issue in another repo of the same owner is allowed by GitHub.
+- After linking, if the project is paused, the task's allowed statuses narrow. The app applies the parent before the status (section 3). `planStatus` lets an Inbox item take any status, so the rule is enforced where proposals are made: `validateProposals` sets the status of a task under a paused project, and the review list offers only that status once such a project is chosen.
 
 Status and Priority keep their existing routes.
 
@@ -81,7 +81,7 @@ What Claude receives:
 
 `TriageSchema` is `{ proposals: Proposal[] }` with string fields; enums are not hard-coded in the schema because Area options live on the board.
 
-Validation, `validateProposals(proposals, items, board)`, pure:
+Validation, `validateProposals(proposals, items, fields)`, pure:
 
 - Drops a proposal whose `id` is not an Inbox task, and duplicates (keeps the first).
 - Sets to null any `area`, `size` or `priority` that is not a current option of its field.
