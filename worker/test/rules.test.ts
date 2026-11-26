@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkDelete, checkNotPlanned, planPriority, planStatus } from '../src/rules';
+import { checkDelete, checkNotPlanned, planFields, planParent, planPriority, planStatus } from '../src/rules';
+import type { BoardField } from '../src/github';
 import { allowedStatuses, makeRef, parseRef, statusSlug, type BoardItem } from '../src/types';
 
 function item(over: Partial<BoardItem> & { repo?: string; number: number }): BoardItem {
@@ -143,5 +144,99 @@ describe('checkNotPlanned', () => {
 		expect(checkNotPlanned(board[7])).toBeNull();
 		expect(checkNotPlanned(board[6])).toBe('only open, triaged tasks can be closed as not planned');
 		expect(checkNotPlanned(board[0])).toBe('only open, triaged tasks can be closed as not planned');
+	});
+});
+
+const fields: BoardField[] = [
+	{
+		id: 'F_area',
+		name: 'Area',
+		options: [
+			{ id: 'o_res', name: 'Research' },
+			{ id: 'o_per', name: 'Personal' },
+		],
+	},
+	{
+		id: 'F_size',
+		name: 'Size',
+		options: [
+			{ id: 'o_s', name: 'S' },
+			{ id: 'o_m', name: 'M' },
+		],
+	},
+];
+
+describe('planFields', () => {
+	const items = [item({ number: 30, status: 'Inbox', area: 'Research', size: null }), item({ number: 31, status: 'Inbox', open: false })];
+
+	it('writes only the fields that change', () => {
+		expect(planFields(items, fields, id('st4eve/MyLife', 30), { area: 'Research', size: 'M' })).toEqual({
+			ok: true,
+			writes: [{ id: id('st4eve/MyLife', 30), ref: 'st4eve/MyLife#30', field: 'Size', option: 'M' }],
+		});
+	});
+	it('writes nothing when both already match', () => {
+		expect(planFields(items, fields, id('st4eve/MyLife', 30), { area: 'Research' })).toEqual({ ok: true, writes: [] });
+	});
+	it('refuses a missing or closed item', () => {
+		expect(planFields(items, fields, 'nope', { size: 'S' })).toEqual({ ok: false, reason: 'no such item' });
+		expect(planFields(items, fields, id('st4eve/MyLife', 31), { size: 'S' })).toEqual({ ok: false, reason: 'st4eve/MyLife#31 is closed' });
+	});
+	it('refuses a value that is not an option of its field', () => {
+		expect(planFields(items, fields, id('st4eve/MyLife', 30), { area: 'research' })).toEqual({
+			ok: false,
+			reason: 'board has no Area option "research"',
+		});
+		expect(planFields(items, fields, id('st4eve/MyLife', 30), { size: 'XL' })).toEqual({
+			ok: false,
+			reason: 'board has no Size option "XL"',
+		});
+	});
+});
+
+describe('planParent', () => {
+	const items = [
+		item({ number: 1, isProject: true, status: 'In progress' }),
+		item({ number: 1, repo: OTHER, isProject: true, status: 'Waiting' }),
+		item({ number: 2, isProject: true, status: 'Done', open: false }),
+		item({ number: 40, status: 'Inbox' }),
+		item({ number: 41, status: 'Inbox', parent: 'st4eve/MyLife#1' }),
+		item({ number: 42, status: 'Inbox', open: false }),
+	];
+	const task = id('st4eve/MyLife', 40);
+
+	it('plans the link to an open project', () => {
+		expect(planParent(items, task, 'st4eve/MyLife#1')).toEqual({
+			ok: true,
+			write: { id: task, ref: 'st4eve/MyLife#40', parent: 'st4eve/MyLife#1' },
+		});
+	});
+	it('matches the parent by full ref', () => {
+		expect(planParent(items, task, `${OTHER}#1`)).toEqual({ ok: true, write: { id: task, ref: 'st4eve/MyLife#40', parent: `${OTHER}#1` } });
+		expect(planParent(items, task, 'st4eve/Other#1')).toEqual({ ok: false, reason: 'st4eve/Other#1 is not an open project on the board' });
+	});
+	it('is a no-op for the parent the item already has', () => {
+		expect(planParent(items, id('st4eve/MyLife', 41), 'st4eve/MyLife#1')).toEqual({ ok: true, write: null });
+	});
+	it('refuses a different parent when one is set', () => {
+		expect(planParent(items, id('st4eve/MyLife', 41), `${OTHER}#1`)).toEqual({
+			ok: false,
+			reason: 'st4eve/MyLife#41 already has a parent',
+		});
+	});
+	it('refuses a missing, closed or project item', () => {
+		expect(planParent(items, 'nope', 'st4eve/MyLife#1')).toEqual({ ok: false, reason: 'no such item' });
+		expect(planParent(items, id('st4eve/MyLife', 42), 'st4eve/MyLife#1')).toEqual({ ok: false, reason: 'st4eve/MyLife#42 is closed' });
+		expect(planParent(items, id('st4eve/MyLife', 1), `${OTHER}#1`)).toEqual({ ok: false, reason: 'st4eve/MyLife#1 is a project' });
+	});
+	it('refuses a closed project or a plain task as the parent', () => {
+		expect(planParent(items, task, 'st4eve/MyLife#2')).toEqual({
+			ok: false,
+			reason: 'st4eve/MyLife#2 is not an open project on the board',
+		});
+		expect(planParent(items, task, 'st4eve/MyLife#41')).toEqual({
+			ok: false,
+			reason: 'st4eve/MyLife#41 is not an open project on the board',
+		});
 	});
 });
