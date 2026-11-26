@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardField } from '../src/github';
-import { buildTriageRequest, validateProposals, type RawProposal } from '../src/triage';
+import { TriageError, buildTriageRequest, runTriage, validateProposals, type Ask, type RawProposal } from '../src/triage';
+import type { BoardField, Board } from '../src/github';
 import { makeRef, type BoardItem } from '../src/types';
 
 function item(over: Partial<BoardItem> & { repo?: string; number: number }): BoardItem {
@@ -147,5 +147,31 @@ describe('validateProposals', () => {
 	});
 	it('cuts the reason to 140 characters', () => {
 		expect(check([raw({ reason: 'x'.repeat(300) })])[0].reason).toHaveLength(140);
+	});
+});
+
+describe('runTriage', () => {
+	const board: Board = { projectId: 'PVT_test', fields, items };
+
+	it('does not call Claude when the inbox is empty', async () => {
+		const ask: Ask = async () => {
+			throw new Error('should not be called');
+		};
+		const empty: Board = { ...board, items: items.filter((i) => i.status !== 'Inbox') };
+		expect((await runTriage(empty, ask)).proposals).toEqual([]);
+	});
+	it('returns validated proposals and the options', async () => {
+		const ask: Ask = async () => ({ refused: false, proposals: [raw({ area: 'Personal' }), raw({ id: 'made-up' })] });
+		const out = await runTriage(board, ask);
+		expect(out.proposals.map((p) => [p.ref, p.area])).toEqual([['st4eve/MyLife#10', 'Personal']]);
+		expect(out.options.size).toEqual(['S', 'M']);
+	});
+	it('turns a refusal into a TriageError', async () => {
+		const ask: Ask = async () => ({ refused: true, proposals: null });
+		await expect(runTriage(board, ask)).rejects.toThrow(new TriageError('Claude declined to triage this inbox'));
+	});
+	it('turns an unparsed answer into a TriageError', async () => {
+		const ask: Ask = async () => ({ refused: false, proposals: null });
+		await expect(runTriage(board, ask)).rejects.toThrow(new TriageError("Claude's answer could not be read"));
 	});
 });

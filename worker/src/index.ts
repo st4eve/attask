@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { REPOS } from './config';
 import {
 	BoardShapeError,
@@ -14,6 +15,7 @@ import {
 } from './github';
 import { parseIssuePath } from './paths';
 import { checkDelete, checkNotPlanned, planFields, planParent, planPriority, planStatus } from './rules';
+import { TriageError, claudeAsker, runTriage } from './triage';
 import { makeRef } from './types';
 
 /**
@@ -124,6 +126,12 @@ async function route(request: Request, env: Env): Promise<Response> {
 		return Response.json({ parent: plan.write?.parent ?? null });
 	}
 
+	if (request.method === 'POST' && url.pathname === '/triage') {
+		if (!env.ANTHROPIC_API_KEY) return Response.json({ error: 'triage is not set up' }, { status: 500 });
+		const board = await fetchBoard(env.GITHUB_TOKEN);
+		return Response.json(await runTriage(board, claudeAsker(env.ANTHROPIC_API_KEY)));
+	}
+
 	if (request.method === 'POST' && url.pathname === '/tasks') {
 		const body = await readJson(request);
 		if (!body) return Response.json({ error: 'body is not valid JSON' }, { status: 400 });
@@ -149,6 +157,8 @@ export default {
 				? new Response(null, { status: 204 })
 				: await route(request, env).catch((e: unknown) => {
 						if (e instanceof GithubError || e instanceof BoardShapeError) return Response.json({ error: e.message }, { status: 409 });
+						// claude declined, answered badly, or the api failed after the sdk's own retries
+						if (e instanceof TriageError || e instanceof Anthropic.APIError) return Response.json({ error: e.message }, { status: 502 });
 						console.error('unhandled error', e instanceof Error ? e.name : 'unknown');
 						return Response.json({ error: 'internal error' }, { status: 500 });
 					});

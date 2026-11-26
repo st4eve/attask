@@ -1,5 +1,7 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
-import type { BoardField } from './github';
+import type { Board, BoardField } from './github';
 import { PAUSED_STATUSES, type BoardItem, type Proposal, type TriageOptions } from './types';
 
 /** The Claude model triage runs on. Sonnet 5.5 or Haiku 5.5 would also work; changing this line is enough. */
@@ -123,4 +125,59 @@ export function validateProposals(raw: RawProposal[], items: BoardItem[], fields
 		});
 	}
 	return out;
+}
+
+/** Claude declined or answered something unreadable. The route answers 502 with the message. */
+export class TriageError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'TriageError';
+	}
+}
+
+/** Asks Claude for proposals. `refused` is true when Claude declined; `proposals` is null when the answer did not match the schema. */
+export type Ask = (request: TriageRequest) => Promise<{ refused: boolean; proposals: RawProposal[] | null }>;
+
+/**
+ * The real call to Claude, with server-side fallback so a capacity error or decline on the primary model is retried on a fallback model by Anthropic.
+ *
+ * Args:
+ * 	apiKey: The Worker's `ANTHROPIC_API_KEY`.
+ */
+export function claudeAsker(apiKey: string): Ask {
+	const client = new Anthropic({ apiKey });
+	return async (request) => {
+		const res = await client.beta.messages.parse({
+			model: MODEL,
+			max_tokens: 16000,
+			betas: ['server-side-fallback-2026-07-01'],
+			fallbacks: 'default',
+			system: SYSTEM,
+			messages: [{ role: 'user', content: JSON.stringify(request) }],
+			output_config: { effort: 'low', format: betaZodOutputFormat(TriageSchema) },
+		});
+		return { refused: res.stop_reason === 'refusal', proposals: res.parsed_output?.proposals ?? null };
+	};
+}
+
+/**
+ * Triage of the whole inbox. Writes nothing.
+ *
+ * Args:
+ * 	board: The board, freshly fetched.
+ * 	ask: How to reach Claude, `claudeAsker` outside tests.
+ *
+ * Returns:
+ * 	The checked proposals, plus the option names the review list offers.
+ *
+ * Raises:
+ * 	TriageError when Claude declines or its answer can't be read.
+ */
+export async function runTriage(board: Board, ask: Ask): Promise<{ proposals: Proposal[]; options: TriageOptions }> {
+	const request = buildTriageRequest(board.items, board.fields);
+	if (request.tasks.length === 0) return { proposals: [], options: request.options };
+	const answer = await ask(request);
+	if (answer.refused) throw new TriageError('Claude declined to triage this inbox');
+	if (!answer.proposals) throw new TriageError("Claude's answer could not be read");
+	return { proposals: validateProposals(answer.proposals, board.items, board.fields), options: request.options };
 }
