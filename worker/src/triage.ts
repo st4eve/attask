@@ -32,7 +32,7 @@ export const SYSTEM = `You triage the inbox of a personal task board. For every 
 - size: rough effort, one of options.size (XS is minutes, XL is days).
 - priority: one of options.priority, P0 most urgent; most tasks are P1 or P2.
 - status: "To do" if it should be done soon, "Backlog" if it can wait.
-- parent: the ref of a project in "projects" the task clearly belongs to, else null. Only use listed refs. A task of a project in Backlog or Waiting takes that project's status.
+- parent: the ref of a project in "projects" the task clearly belongs to, else null. Only use listed refs. Keep a task's existing parent. A task of a project in Backlog or Waiting takes that project's status.
 - reason: one short sentence the owner reads, saying why.
 Leave a value null when you are unsure. Tasks labelled lab are done at the lab.`;
 
@@ -40,7 +40,17 @@ Leave a value null when you are unsure. Tasks labelled lab are done at the lab.`
 export interface TriageRequest {
 	options: TriageOptions;
 	projects: { ref: string; title: string; status: string | null; area: string | null }[];
-	tasks: { id: string; ref: string; title: string; area: string | null; size: string | null; priority: string | null; lab: boolean }[];
+	/** `parent` is the task's current parent ref, which triage never changes */
+	tasks: {
+		id: string;
+		ref: string;
+		title: string;
+		area: string | null;
+		size: string | null;
+		priority: string | null;
+		lab: boolean;
+		parent: string | null;
+	}[];
 }
 
 // open, non-project items still in the inbox
@@ -81,6 +91,7 @@ export function buildTriageRequest(items: BoardItem[], fields: BoardField[]): Tr
 			size: t.size,
 			priority: t.priority,
 			lab: t.lab,
+			parent: t.parent,
 		})),
 	};
 }
@@ -94,7 +105,7 @@ export function buildTriageRequest(items: BoardItem[], fields: BoardField[]): Tr
  * 	fields: The board's single-select fields.
  *
  * Returns:
- * 	One proposal per open Inbox task Claude answered for, first one wins: unknown options and parents nulled, status made to obey a paused parent, reason cut to 140 characters.
+ * 	One proposal per open Inbox task Claude answered for, first one wins: unknown options and parents nulled, a task's existing parent kept over Claude's, status made to obey a paused parent, reason cut to 140 characters.
  */
 export function validateProposals(raw: RawProposal[], items: BoardItem[], fields: BoardField[]): Proposal[] {
 	const tasks = inboxTasks(items);
@@ -108,7 +119,9 @@ export function validateProposals(raw: RawProposal[], items: BoardItem[], fields
 		if (!task || seen.has(p.id)) continue;
 		seen.add(p.id);
 
-		const project = items.find((i) => i.isProject && i.open && i.ref === p.parent);
+		// a task that already has a parent keeps it, since changing a parent is out of scope
+		const wanted = task.parent ?? p.parent;
+		const project = items.find((i) => i.isProject && i.open && i.ref === wanted);
 		let status: Proposal['status'] = p.status === 'To do' ? 'To do' : 'Backlog';
 		// a paused project's tasks take its status, the only way Waiting appears
 		if (project?.status && PAUSED_STATUSES.includes(project.status)) status = project.status as 'Backlog' | 'Waiting';
@@ -139,7 +152,26 @@ export class TriageError extends Error {
 export type Ask = (request: TriageRequest) => Promise<{ refused: boolean; proposals: RawProposal[] | null }>;
 
 /**
- * The real call to Claude, with server-side fallback so a capacity error or decline on the primary model is retried on a fallback model by Anthropic.
+ * Reads Claude's reply. Never throws: a refusal, an answer cut off at `max_tokens`, bad JSON or the wrong shape all become something `runTriage` reports as a 502.
+ *
+ * Args:
+ * 	stopReason: The response's `stop_reason`.
+ * 	content: The response's content blocks; the answer is the first text block.
+ */
+export function readAnswer(stopReason: string | null, content: { type: string; text?: string }[]): Awaited<ReturnType<Ask>> {
+	if (stopReason === 'refusal') return { refused: true, proposals: null };
+	const text = content.find((b) => b.type === 'text')?.text;
+	if (stopReason === 'max_tokens' || text === undefined) return { refused: false, proposals: null };
+	try {
+		const parsed = TriageSchema.safeParse(JSON.parse(text));
+		return { refused: false, proposals: parsed.success ? parsed.data.proposals : null };
+	} catch {
+		return { refused: false, proposals: null }; // not json
+	}
+}
+
+/**
+ * The real call to Claude, with server-side fallback so a capacity error or decline on the primary model is retried on a fallback model by Anthropic. The output format holds Claude to the schema; `readAnswer` checks it anyway, since a refusal or a cut-off reply may not match.
  *
  * Args:
  * 	apiKey: The Worker's `ANTHROPIC_API_KEY`.
@@ -147,7 +179,7 @@ export type Ask = (request: TriageRequest) => Promise<{ refused: boolean; propos
 export function claudeAsker(apiKey: string): Ask {
 	const client = new Anthropic({ apiKey });
 	return async (request) => {
-		const res = await client.beta.messages.parse({
+		const res = await client.beta.messages.create({
 			model: MODEL,
 			max_tokens: 16000,
 			betas: ['server-side-fallback-2026-07-01'],
@@ -156,15 +188,15 @@ export function claudeAsker(apiKey: string): Ask {
 			messages: [{ role: 'user', content: JSON.stringify(request) }],
 			output_config: { effort: 'low', format: betaZodOutputFormat(TriageSchema) },
 		});
-		return { refused: res.stop_reason === 'refusal', proposals: res.parsed_output?.proposals ?? null };
+		return readAnswer(res.stop_reason, res.content);
 	};
 }
 
 /**
- * Triage of the whole inbox. Writes nothing.
+ * Triage of the whole inbox. Writes nothing. The board is read again after Claude answers, so a task moved out of Inbox meanwhile is dropped.
  *
  * Args:
- * 	board: The board, freshly fetched.
+ * 	getBoard: Fetches the board, `fetchBoard` outside tests.
  * 	ask: How to reach Claude, `claudeAsker` outside tests.
  *
  * Returns:
@@ -173,11 +205,13 @@ export function claudeAsker(apiKey: string): Ask {
  * Raises:
  * 	TriageError when Claude declines or its answer can't be read.
  */
-export async function runTriage(board: Board, ask: Ask): Promise<{ proposals: Proposal[]; options: TriageOptions }> {
+export async function runTriage(getBoard: () => Promise<Board>, ask: Ask): Promise<{ proposals: Proposal[]; options: TriageOptions }> {
+	const board = await getBoard();
 	const request = buildTriageRequest(board.items, board.fields);
 	if (request.tasks.length === 0) return { proposals: [], options: request.options };
 	const answer = await ask(request);
 	if (answer.refused) throw new TriageError('Claude declined to triage this inbox');
 	if (!answer.proposals) throw new TriageError("Claude's answer could not be read");
-	return { proposals: validateProposals(answer.proposals, board.items, board.fields), options: request.options };
+	const fresh = await getBoard();
+	return { proposals: validateProposals(answer.proposals, fresh.items, fresh.fields), options: boardOptions(fresh.fields) };
 }

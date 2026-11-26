@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TriageError, buildTriageRequest, runTriage, validateProposals, type Ask, type RawProposal } from '../src/triage';
+import { TriageError, buildTriageRequest, readAnswer, runTriage, validateProposals, type Ask, type RawProposal } from '../src/triage';
 import type { BoardField, Board } from '../src/github';
 import { makeRef, type BoardItem } from '../src/types';
 
@@ -95,8 +95,26 @@ describe('buildTriageRequest', () => {
 	});
 	it('sends open inbox tasks only, with titles and no bodies', () => {
 		expect(req.tasks).toEqual([
-			{ id: 'id-st4eve/MyLife-10', ref: 'st4eve/MyLife#10', title: 'Fix "the" plot', area: null, size: null, priority: null, lab: true },
-			{ id: 'id-st4eve/MyLife-11', ref: 'st4eve/MyLife#11', title: 'Buy soil', area: null, size: null, priority: null, lab: false },
+			{
+				id: 'id-st4eve/MyLife-10',
+				ref: 'st4eve/MyLife#10',
+				title: 'Fix "the" plot',
+				area: null,
+				size: null,
+				priority: null,
+				lab: true,
+				parent: null,
+			},
+			{
+				id: 'id-st4eve/MyLife-11',
+				ref: 'st4eve/MyLife#11',
+				title: 'Buy soil',
+				area: null,
+				size: null,
+				priority: null,
+				lab: false,
+				parent: null,
+			},
 		]);
 		expect(JSON.stringify(req)).not.toContain('url');
 	});
@@ -158,20 +176,75 @@ describe('runTriage', () => {
 			throw new Error('should not be called');
 		};
 		const empty: Board = { ...board, items: items.filter((i) => i.status !== 'Inbox') };
-		expect((await runTriage(empty, ask)).proposals).toEqual([]);
+		expect((await runTriage(async () => empty, ask)).proposals).toEqual([]);
 	});
 	it('returns validated proposals and the options', async () => {
 		const ask: Ask = async () => ({ refused: false, proposals: [raw({ area: 'Personal' }), raw({ id: 'made-up' })] });
-		const out = await runTriage(board, ask);
+		const out = await runTriage(async () => board, ask);
 		expect(out.proposals.map((p) => [p.ref, p.area])).toEqual([['st4eve/MyLife#10', 'Personal']]);
 		expect(out.options.size).toEqual(['S', 'M']);
 	});
 	it('turns a refusal into a TriageError', async () => {
 		const ask: Ask = async () => ({ refused: true, proposals: null });
-		await expect(runTriage(board, ask)).rejects.toThrow(new TriageError('Claude declined to triage this inbox'));
+		await expect(runTriage(async () => board, ask)).rejects.toThrow(new TriageError('Claude declined to triage this inbox'));
 	});
 	it('turns an unparsed answer into a TriageError', async () => {
 		const ask: Ask = async () => ({ refused: false, proposals: null });
-		await expect(runTriage(board, ask)).rejects.toThrow(new TriageError("Claude's answer could not be read"));
+		await expect(runTriage(async () => board, ask)).rejects.toThrow(new TriageError("Claude's answer could not be read"));
+	});
+});
+
+describe('readAnswer', () => {
+	const text = (t: string) => [{ type: 'text', text: t }];
+	const answer = JSON.stringify({ proposals: [raw({})] });
+
+	it('reads the proposals of a finished answer', () => {
+		expect(readAnswer('end_turn', text(answer))).toEqual({ refused: false, proposals: [raw({})] });
+	});
+	it('marks a refusal even when its text is not JSON', () => {
+		expect(readAnswer('refusal', text('{"propo'))).toEqual({ refused: true, proposals: null });
+	});
+	it('treats an answer cut off by max_tokens as unreadable', () => {
+		expect(readAnswer('max_tokens', text(answer))).toEqual({ refused: false, proposals: null });
+	});
+	it('treats bad JSON, the wrong shape or no text as unreadable', () => {
+		expect(readAnswer('end_turn', text('{"proposals": ['))).toEqual({ refused: false, proposals: null });
+		expect(readAnswer('end_turn', text('{"proposals": [{"id": 1}]}'))).toEqual({ refused: false, proposals: null });
+		expect(readAnswer('end_turn', [])).toEqual({ refused: false, proposals: null });
+	});
+});
+
+describe('runTriage on a board that changed', () => {
+	it('drops tasks that left the inbox while Claude was answering', async () => {
+		const before: Board = { projectId: 'PVT_test', fields, items };
+		const after: Board = {
+			...before,
+			items: items.map((i) => (i.number === 10 && i.repo === 'st4eve/MyLife' ? { ...i, status: 'In progress' } : i)),
+		};
+		const boards = [before, after];
+		const ask: Ask = async () => ({ refused: false, proposals: [raw({}), raw({ id: 'id-st4eve/MyLife-11' })] });
+		const out = await runTriage(async () => boards.shift()!, ask);
+		expect(out.proposals.map((p) => p.ref)).toEqual(['st4eve/MyLife#11']);
+	});
+});
+
+describe('tasks that already have a parent', () => {
+	const withParents: BoardItem[] = [
+		...items,
+		item({ number: 14, parent: `${OTHER}#1`, title: 'Under the paused project' }),
+		item({ number: 15, parent: 'st4eve/MyLife#11', title: 'Under a plain task' }),
+	];
+
+	it('sends the current parent to Claude', () => {
+		const tasks = buildTriageRequest(withParents, fields).tasks;
+		expect(tasks.find((t) => t.ref === 'st4eve/MyLife#14')?.parent).toBe(`${OTHER}#1`);
+	});
+	it('keeps the existing project and takes its paused status', () => {
+		const [p] = validateProposals([raw({ id: 'id-st4eve/MyLife-14', parent: 'st4eve/MyLife#1', status: 'To do' })], withParents, fields);
+		expect([p.parent, p.status]).toEqual([`${OTHER}#1`, 'Waiting']);
+	});
+	it('proposes no project when the existing parent is not a project', () => {
+		const [p] = validateProposals([raw({ id: 'id-st4eve/MyLife-15', parent: 'st4eve/MyLife#1', status: 'To do' })], withParents, fields);
+		expect([p.parent, p.status]).toEqual([null, 'To do']);
 	});
 });

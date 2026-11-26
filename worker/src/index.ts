@@ -128,8 +128,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 
 	if (request.method === 'POST' && url.pathname === '/triage') {
 		if (!env.ANTHROPIC_API_KEY) return Response.json({ error: 'triage is not set up' }, { status: 500 });
-		const board = await fetchBoard(env.GITHUB_TOKEN);
-		return Response.json(await runTriage(board, claudeAsker(env.ANTHROPIC_API_KEY)));
+		return Response.json(await runTriage(() => fetchBoard(env.GITHUB_TOKEN), claudeAsker(env.ANTHROPIC_API_KEY)));
 	}
 
 	if (request.method === 'POST' && url.pathname === '/tasks') {
