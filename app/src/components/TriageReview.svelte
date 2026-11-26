@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { TriageOptions } from "../lib/api";
     import { board, loadBoard, openProjects } from "../lib/board.svelte";
-    import { applyProposal, setParent, statusChoices, type Row } from "../lib/triage";
+    import { applyProposal, setParent, staleReason, statusChoices, type Row } from "../lib/triage";
     import Icon from "./Icon.svelte";
 
     /** Claude's proposals for the inbox, one row each. Every chip is a menu; apply writes the row, skip leaves it out of "apply all". Applied rows disappear; closing discards the rest. */
@@ -10,10 +10,11 @@
     let projects = $derived(openProjects(board.items));
     let running = $state(false);
 
-    /** Writes one row; on failure the row stays with the reason, and the task stays in Inbox. */
+    /** Writes one row; on failure the row stays with the reason, and the task stays in Inbox. A row whose task left the inbox since triage ran is refused, not written. */
     async function apply(row: Row): Promise<boolean> {
+        row.error = staleReason(row.proposal, board.items);
+        if (row.error) return false;
         row.busy = true;
-        row.error = "";
         try {
             await applyProposal(row.proposal);
             return true;
@@ -25,9 +26,10 @@
         }
     }
 
-    /** Applies the given rows one after another, then reloads the board once and drops the rows that were written. */
+    /** Reloads the board so each row is checked against it, applies the rows one after another, then reloads once more and drops the rows that were written. */
     async function applyRows(chosen: Row[]): Promise<void> {
         running = true;
+        await loadBoard();
         const done = new Set<string>();
         for (const row of chosen) if (await apply(row)) done.add(row.proposal.id);
         rows = rows.filter((r) => !done.has(r.proposal.id));
@@ -72,7 +74,7 @@
                     </select>
                 </label>
                 <label class="chip">{projects.find((p) => p.ref === row.proposal.parent)?.title ?? "no project"}
-                    <select aria-label="project" value={row.proposal.parent ?? ""} onchange={(e) => (row.proposal = setParent(row.proposal, e.currentTarget.value || null, board.items))}>
+                    <select aria-label="project" disabled={row.hasParent} value={row.proposal.parent ?? ""} onchange={(e) => (row.proposal = setParent(row.proposal, e.currentTarget.value || null, board.items))}>
                         <option value="">no project</option>
                         {#each projects as p}<option value={p.ref}>{p.title}</option>{/each}
                     </select>

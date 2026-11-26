@@ -12,17 +12,29 @@ export interface Row {
     busy: boolean;
     /** why the last apply failed, empty if it didn't */
     error: string;
+    /** the task already has a parent, which triage keeps, so the project chip is locked */
+    hasParent: boolean;
 }
 
 /** Turns proposals into rows. A row where Claude suggested nothing beyond a status starts skipped. */
 export function toRows(proposals: Proposal[], items: BoardItem[]): Row[] {
-    return proposals.map((p) => ({
-        proposal: p,
-        title: items.find((i) => i.id === p.id)?.title ?? p.ref,
-        skipped: p.area === null && p.size === null && p.priority === null && p.parent === null,
-        busy: false,
-        error: "",
-    }));
+    return proposals.map((p) => {
+        const item = items.find((i) => i.id === p.id);
+        return {
+            proposal: p,
+            title: item?.title ?? p.ref,
+            skipped: p.area === null && p.size === null && p.priority === null && p.parent === null,
+            busy: false,
+            error: "",
+            hasParent: (item?.parent ?? null) !== null,
+        };
+    });
+}
+
+/** Why a row must not be applied any more, empty if it still can: its task has to be an open Inbox task on the board as it is now, so a change made by hand since triage ran is never overwritten. */
+export function staleReason(proposal: Proposal, items: BoardItem[]): string {
+    const item = items.find((i) => i.id === proposal.id);
+    return item && item.open && !item.isProject && item.status === "Inbox" ? "" : `${proposal.ref} is no longer in the inbox`;
 }
 
 // the status a parent forces on its tasks, or null when it is active or there is none

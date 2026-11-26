@@ -30,7 +30,7 @@ All routes keep the existing conventions: Bearer `APP_KEY`, CORS from `ALLOWED_O
 `POST /triage`, no body. Returns `{ proposals: Proposal[]; options: { area: string[]; size: string[]; priority: string[] } }`. `options` lists the board's option names so the review list's menus can offer them.
 
 - Fetches the board, takes `inboxTasks` (open, non-project items with Status `Inbox`). If there are none, returns `{ proposals: [] }` without calling Claude.
-- Sends Claude what it needs and nothing more (section 2), gets structured output, validates it (section 2), returns the valid proposals.
+- Sends Claude what it needs and nothing more (section 2), gets structured output, reads the board again (a task may have left Inbox while Claude answered), validates against that copy (section 2), returns the valid proposals. A reply that is refused, cut off at `max_tokens`, not JSON or the wrong shape is a 502.
 - `Proposal`, in `types.ts` so the app shares it:
 
   ```ts
@@ -85,7 +85,7 @@ Validation, `validateProposals(proposals, items, fields)`, pure:
 
 - Drops a proposal whose `id` is not an Inbox task, and duplicates (keeps the first).
 - Sets to null any `area`, `size` or `priority` that is not a current option of its field.
-- Sets `parent` to null unless it is an open `project` issue on the board.
+- Keeps a task's existing parent over Claude's (changing a parent is out of scope); the tasks sent to Claude include it. Otherwise sets `parent` to null unless it is an open `project` issue on the board.
 - If `parent` names a paused project, sets `status` to that project's status (Backlog or Waiting) so the proposal obeys the cascade rule. This is the only way `status` becomes `Waiting`; Claude's own `status` must be To do or Backlog, and anything else becomes Backlog.
 - Truncates `reason` to 140 characters.
 
@@ -98,7 +98,7 @@ Validation, `validateProposals(proposals, items, fields)`, pure:
 - The `triage inbox` link becomes a button with the same look and Claude-orange icon. Pressing it shows "triaging…" and calls `postTriage`. It is disabled while running.
 - The result opens a review list, one row per proposal: ref and title, the proposed Area, Size, Priority, Status and project as small chips, and the reason in muted text.
 - Each chip is editable with the same menus the detail sheet uses. Each row has apply and skip. "Apply all" applies every row not skipped. Rows where Area, Size, Priority and project are all null start skipped, since Claude had nothing to suggest beyond a status.
-- Applying a row writes in order: parent, fields, priority, status. The status write moves it out of Inbox, so it goes last; if an earlier write fails, the item stays in Inbox and the row shows the error.
+- Applying a row writes in order: parent, fields, priority, status. The status write moves it out of Inbox, so it goes last; if an earlier write fails, the item stays in Inbox and the row shows the error. Before applying, the app reloads the board and refuses a row whose task is no longer an open Inbox task, so a change made by hand meanwhile is never overwritten. A row whose task already has a parent has its project chip locked.
 - After applying, the board reloads and applied rows disappear. Closing the list discards unapplied proposals.
 
 ## 4. Errors, secrets, testing, cost

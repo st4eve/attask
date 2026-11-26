@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeRef, type BoardItem, type Proposal } from "../../../worker/src/types";
-import { setParent, statusChoices, toRows } from "./triage";
+import { setParent, staleReason, statusChoices, toRows } from "./triage";
 
 function item(over: Partial<BoardItem> & { repo?: string; number: number }): BoardItem {
     const repo = over.repo ?? "st4eve/MyLife";
@@ -44,5 +44,25 @@ describe("setParent", () => {
     it("goes back to To do when leaving a paused project", () => {
         const paused = setParent(base, `${OTHER}#1`, items);
         expect(setParent(paused, null, items)).toMatchObject({ parent: null, status: "To do" });
+    });
+});
+
+describe("staleReason", () => {
+    it("is empty for an open inbox task", () => {
+        expect(staleReason(base, items)).toBe("");
+    });
+    it("explains a task that left the inbox, closed or vanished", () => {
+        const moved = items.map((i) => (i.number === 10 ? { ...i, status: "In progress" } : i));
+        const closed = items.map((i) => (i.number === 10 ? { ...i, open: false } : i));
+        const gone = items.filter((i) => i.number !== 10);
+        for (const board of [moved, closed, gone]) expect(staleReason(base, board)).toBe("st4eve/MyLife#10 is no longer in the inbox");
+    });
+});
+
+describe("toRows and existing parents", () => {
+    it("marks a row whose task already has a parent", () => {
+        const withParent = [...items, item({ number: 12, parent: `${OTHER}#1` })];
+        const rows = toRows([base, { ...base, id: "id-st4eve/MyLife-12", ref: "st4eve/MyLife#12" }], withParent);
+        expect(rows.map((r) => r.hasParent)).toEqual([false, true]);
     });
 });
