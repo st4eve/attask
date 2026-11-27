@@ -55,10 +55,11 @@ When the route is `task`, `App.svelte` waits for the board to load (it already l
 
 1. Finds the full ref with `fullRef`. No match: `board.error = "<repo>#<number> isn't a board repo"`, address becomes `#/inbox`.
 2. Finds the board item with that ref. Not on the board (closed, or never added): `board.error = "<ref> isn't on the board"`, address becomes `#/inbox`.
+   A good link sets `board.error` to "", so an error left by an earlier bad link goes away.
 3. Picks the page underneath:
    - a project item: its own project page, no sheet
    - a task with a parent: the parent's project page
-   - a task with an Area: that Area's page
+   - a task with an Area that has left Inbox: that Area's page (an Inbox task is only listed on the inbox)
    - otherwise the inbox
 4. Replaces the address with that page's hash using `history.replaceState`, so Back does not return to the `#/task/...` address and reopen the sheet.
 5. For a task, calls `select(ref)`, which opens the detail sheet as a card tap does. For a project or a bad link it calls `select(null)`, so a sheet left open from before does not sit over the error.

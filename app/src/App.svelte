@@ -96,7 +96,8 @@
         if (route.page !== "task" || board.items.length === 0) return;
         const landing = taskLanding(board.items, route.repo, route.number);
         replaceRoute(landing.hash);
-        if (landing.error) board.error = landing.error;
+        // a good link clears the error a bad one left
+        board.error = landing.error;
         // a project or a bad link closes any sheet left open from before
         select(landing.selected);
     });

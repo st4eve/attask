@@ -20,6 +20,7 @@ const items = [
     item({ number: 5, parent: "st4eve/MyLife#99", area: "Admin" }),
     item({ number: 6, area: "Admin", open: false, status: "Done" }),
     item({ number: 7, repo: "Shastri-Lab/polymerNN", area: "Research" }),
+    item({ number: 8, status: "Inbox", area: "Admin" }),
 ];
 
 describe("taskLanding", () => {
@@ -31,6 +32,9 @@ describe("taskLanding", () => {
     });
     it("opens a task with no Area over the inbox", () => {
         expect(taskLanding(items, "MyLife", 4)).toEqual({ hash: "#/inbox", selected: "st4eve/MyLife#4", error: "" });
+    });
+    it("opens an inbox task over the inbox even when it has an Area", () => {
+        expect(taskLanding(items, "MyLife", 8)).toEqual({ hash: "#/inbox", selected: "st4eve/MyLife#8", error: "" });
     });
     it("treats a parent that is not a project on the board as flat", () => {
         expect(taskLanding(items, "MyLife", 5)).toEqual({ hash: areaHref("Admin"), selected: "st4eve/MyLife#5", error: "" });

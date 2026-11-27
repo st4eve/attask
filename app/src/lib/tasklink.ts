@@ -17,7 +17,7 @@ export interface Landing {
  *     number: The issue number.
  *
  * Returns:
- *     A project opens as its own page. A task opens its sheet over its project page, else its Area page, else the inbox. An unknown repo or a ref not on the board lands on the inbox with an error.
+ *     A project opens as its own page. A task opens its sheet over its project page, else its Area page unless it is still in Inbox, else the inbox. An unknown repo or a ref not on the board lands on the inbox with an error.
  */
 export function taskLanding(items: BoardItem[], repo: string, number: number): Landing {
     const ref = fullRef(repo, number);
@@ -26,6 +26,7 @@ export function taskLanding(items: BoardItem[], repo: string, number: number): L
     if (!item) return { hash: "#/inbox", selected: null, error: `${ref} isn't on the board` };
     if (item.isProject) return { hash: projectHref(ref), selected: null, error: "" };
     const project = projectOf(items, item);
-    const hash = project ? projectHref(project.ref) : item.area ? areaHref(item.area) : "#/inbox";
+    // an inbox task is only listed on the inbox page, even once triage has given it an Area
+    const hash = project ? projectHref(project.ref) : item.area && item.status !== "Inbox" ? areaHref(item.area) : "#/inbox";
     return { hash, selected: ref, error: "" };
 }
