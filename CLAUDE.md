@@ -18,16 +18,16 @@ Two terminals, each from its own directory:
 - `cd worker && npx wrangler dev --ip 0.0.0.0` serves `localhost:8787`.
 - `cd app && npm run dev -- --host` serves `localhost:5173` and the LAN address for the phone.
 
-Local secrets live in `worker/.dev.vars` (git-ignored, copy `.dev.vars.example`): `GITHUB_TOKEN`, `APP_KEY`, and `ALLOWED_ORIGINS` (comma-separated, include the Mac's LAN origin for phone testing). Restart `wrangler dev` after editing it. The app stores the Worker URL and app key in `localStorage` through its Settings page. The user enters them once per device.
+Local secrets live in `worker/.dev.vars` (git-ignored, copy `.dev.vars.example`): `GITHUB_TOKEN`, `APP_KEY`, `ALLOWED_ORIGINS` (comma-separated, include the Mac's LAN origin for phone testing), and `ANTHROPIC_API_KEY` (for `POST /triage`; the owner sets it, never in a logged command). Restart `wrangler dev` after editing it. The app stores the Worker URL and app key in `localStorage` through its Settings page. The user enters them once per device.
 
 ## Gate
 
 Run before every PR. All must pass.
 
 - `cd app && npm run check`
-- `cd app && npx vitest run` (unit tests cover `next.ts`, `route.ts` and `issuePath`)
+- `cd app && npx vitest run` (unit tests cover `next.ts`, `route.ts`, `issuePath` and `triage.ts`)
 - `cd worker && npm run cf-typegen && npx tsc --noEmit`
-- `cd worker && npx vitest run --passWithNoTests` (unit tests cover `rules.ts`, `paths.ts` and `github.ts` parsing)
+- `cd worker && npx vitest run --passWithNoTests` (unit tests cover `rules.ts`, `paths.ts`, `github.ts` parsing and writes, and `triage.ts`)
 
 ## Workflow
 

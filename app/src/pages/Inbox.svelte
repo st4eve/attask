@@ -2,14 +2,32 @@
     import Card from "../components/Card.svelte";
     import AddTaskDialog from "../components/AddTaskDialog.svelte";
     import Icon from "../components/Icon.svelte";
-    import { postTask } from "../lib/api";
+    import TriageReview from "../components/TriageReview.svelte";
+    import Spinner from "../components/Spinner.svelte";
+    import { postTask, postTriage, type TriageOptions } from "../lib/api";
     import { board, inboxTasks, loadBoard } from "../lib/board.svelte";
+    import { toRows, type Row } from "../lib/triage";
 
-    /** Open tasks still in the inbox. Each can be moved by hand from its detail sheet's status menu, or all triaged at once by an agent. The button opens Claude with a triage prompt for these issues already filled in, where it can be edited before sending. */
+    /** Open tasks still in the inbox. Each can be moved by hand from its detail sheet's status menu, or all triaged at once: the triage button asks the Worker to have Claude propose Area, Size, Priority, Status and project for each, and opens a review list where nothing is written until applied. */
     let tasks = $derived(inboxTasks(board.items));
 
-    const prompt =
-        "Triage my inbox on the task_planner board (GitHub Project st4eve #2) with the MyLife planner skill. For each Inbox item (refs like owner/name#n): set Area, Size and Priority, set Status to To do or Backlog, and add it as a sub-issue of a `project` issue if it belongs to one.";
+    /** The open triage review, or null when none is showing. */
+    let review: { rows: Row[]; options: TriageOptions } | null = $state(null);
+    /** True while the Worker is asking Claude. */
+    let triaging = $state(false);
+
+    /** Asks the Worker for proposals and opens the review list; an empty answer or a failure goes to `board.error`. */
+    async function triage(): Promise<void> {
+        triaging = true;
+        try {
+            const { proposals, options } = await postTriage();
+            board.error = proposals.length === 0 ? "nothing to triage" : "";
+            review = proposals.length === 0 ? null : { rows: toRows(proposals, board.items), options };
+        } catch (err) {
+            board.error = err instanceof Error ? err.message : String(err);
+        }
+        triaging = false;
+    }
 
     let list: HTMLElement | undefined = $state();
     /** Whether the add-task pop-up is showing. */
@@ -59,11 +77,14 @@
 <div class="actions">
     <button class="pill" onclick={() => (open = true)}><Icon name="plus" size={1.3} />add task</button>
     {#if tasks.length > 0}
-        <a class="pill" href="https://claude.ai/new?q={encodeURIComponent(prompt)}" target="_blank" rel="noopener">
-            <Icon name="claude" size={1.3} />triage inbox
-        </a>
+        <button class="pill triage" disabled={triaging || review !== null} onclick={triage}>
+            {#if triaging}<Spinner />triaging…{:else}<Icon name="claude" size={1.3} />triage inbox{/if}
+        </button>
     {/if}
 </div>
+{#if review}
+    <TriageReview bind:rows={review.rows} options={review.options} onclose={() => (review = null)} />
+{/if}
 </div>
 
 <style>
@@ -117,8 +138,11 @@
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     /* the triage icon is Claude's orange */
-    a.pill :global(svg) {
+    .triage :global(svg) {
         color: #d97757;
+    }
+    .pill:disabled {
+        opacity: 0.6;
     }
     @media (hover: hover) {
         .pill:hover {

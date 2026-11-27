@@ -1,5 +1,5 @@
-import { parseRef, type BoardItem, type ItemDetail } from "../../../worker/src/types";
-export type { BoardItem, ItemDetail };
+import { parseRef, type BoardItem, type ItemDetail, type Proposal, type TriageOptions } from "../../../worker/src/types";
+export type { BoardItem, ItemDetail, Proposal, TriageOptions };
 export { HOME_REPO, REPOS } from "../../../worker/src/config";
 
 /** Worker connection settings, kept in localStorage on this device. */
@@ -117,4 +117,19 @@ export function closeTaskNotPlanned(ref: string): Promise<void> {
 /** Asks the Worker to set an item's priority. Throws the board rule's reason if it refuses. */
 export async function postPriority(id: string, priority: string): Promise<void> {
   await request(`/items/${id}/priority`, { priority });
+}
+
+/** Asks the Worker to triage the inbox with Claude. Nothing is written; returns one proposal per inbox task Claude answered for, plus the option names to offer when editing. */
+export function postTriage(): Promise<{ proposals: Proposal[]; options: TriageOptions }> {
+  return request("/triage", {});
+}
+
+/** Asks the Worker to set an item's Area and/or Size. Throws the board rule's reason if it refuses. */
+export async function postFields(id: string, change: { area?: string; size?: string }): Promise<void> {
+  await request(`/items/${id}/fields`, change);
+}
+
+/** Asks the Worker to add a task as a sub-issue of a project, given the project's ref. Throws the board rule's reason if it refuses. */
+export async function postParent(id: string, parent: string): Promise<void> {
+  await request(`/items/${id}/parent`, { parent });
 }

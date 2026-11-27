@@ -119,3 +119,27 @@ export function allowedStatuses(item: BoardItem, items: BoardItem[]): string[] {
 	if (project?.status && PAUSED_STATUSES.includes(project.status)) return [project.status, 'Done'];
 	return TASK_STATUSES.filter((s) => s !== 'Inbox');
 }
+
+/** One task's triage as Claude proposed it and the Worker checked it. Nothing is written until the user applies it. */
+export interface Proposal {
+	/** project item id */
+	id: string;
+	/** `owner/name#n`, taken from the board, not from Claude */
+	ref: string;
+	area: string | null;
+	size: string | null;
+	priority: string | null;
+	/** `Waiting` only when the parent is a paused project in Waiting */
+	status: 'To do' | 'Backlog' | 'Waiting';
+	/** ref of an open `project` issue */
+	parent: string | null;
+	/** one short sentence for the user */
+	reason: string;
+}
+
+/** The board's option names for the fields triage sets, so the review list can offer them. */
+export interface TriageOptions {
+	area: string[];
+	size: string[];
+	priority: string[];
+}

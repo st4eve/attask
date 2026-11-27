@@ -24,9 +24,10 @@ The board is project #2 of `st4eve`. Add the `Backlog` option to the board's Sta
 1. Make a free Cloudflare account at dash.cloudflare.com. No domain or card is needed; the Worker gets a free `*.workers.dev` address.
 2. `cd worker && npx wrangler login` opens a browser to authorize the CLI.
 3. `npx wrangler deploy` uploads the Worker named `attask-worker` and prints its URL, `https://attask-worker.<your-subdomain>.workers.dev`. The first deploy asks you to pick the subdomain.
-4. Set the two secrets. Each command asks for the value at a hidden prompt, so it never lands in shell history:
+4. Set the three secrets. Each command asks for the value at a hidden prompt, so it never lands in shell history:
    - `npx wrangler secret put GITHUB_TOKEN`
    - `npx wrangler secret put APP_KEY` (any long random string, for example from `openssl rand -base64 32`; keep a copy for the phone)
+   - `npx wrangler secret put ANTHROPIC_API_KEY` (a key from console.anthropic.com; used only by the inbox triage button. Each press is one request of a few thousand tokens.)
 5. Check it is up: `curl -i https://attask-worker.<subdomain>.workers.dev/board` should answer `401`, not an error page.
 
 To regenerate the Worker's types (`npm run cf-typegen`) you need a local `worker/.dev.vars` file (git-ignored, copy `.dev.vars.example`); the command reads the secret names from it.
