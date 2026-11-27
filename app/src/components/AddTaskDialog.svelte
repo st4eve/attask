@@ -2,7 +2,7 @@
     import { HOME_REPO, REPOS } from "../lib/api";
     import Icon from "./Icon.svelte";
 
-    /** Title box that opens over the slot where the new task will land: the top of `anchor`, the task list, with the rest of the screen dimmed. Enter or the plus button hands the title to `onsubmit` and closes it; the x, Escape or a tap outside cancels. Args: open: whether it is showing (bindable); anchor: the list element to sit on top of; onsubmit: called with the trimmed, non-empty title and the chosen repo. */
+    /** Title box, with the repo picker on a second row, that opens over the slot where the new task will land: the top of `anchor`, the task list, with the rest of the screen dimmed. Enter or the plus button hands the title to `onsubmit` and closes it; the x, Escape or a tap outside cancels. Args: open: whether it is showing (bindable); anchor: the list element to sit on top of; onsubmit: called with the trimmed, non-empty title and the chosen repo. */
     let {
         open = $bindable(false),
         anchor,
@@ -87,13 +87,18 @@
     .dim.on {
         opacity: 1;
     }
+    /* title and buttons on the first row, the repo picker under the title so a long repo name never squeezes the title */
     form {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        grid-template-areas:
+            "title go cancel"
+            "repo repo repo";
         align-items: center;
-        gap: 0.4rem;
+        column-gap: 0.4rem;
     }
     input {
-        flex: 1;
+        grid-area: title;
         min-width: 0;
         padding: 0.5em 0.2em;
         font: inherit;
@@ -106,15 +111,18 @@
         outline: none;
     }
     label {
+        grid-area: repo;
         display: flex;
         align-items: center;
         gap: 0.3rem;
-        flex-shrink: 0;
+        min-width: 0;
+        padding: 0 0.2em 0.35rem;
         font-size: 0.85em;
         color: var(--muted);
     }
     select {
-        max-width: 9rem;
+        min-width: 0;
+        max-width: 100%;
         font: inherit;
         color: var(--text);
         background: var(--bg-alt);
@@ -133,6 +141,7 @@
         cursor: pointer;
     }
     .go {
+        grid-area: go;
         color: var(--accent);
     }
     .go:disabled {
@@ -140,6 +149,7 @@
         cursor: default;
     }
     .cancel {
+        grid-area: cancel;
         color: var(--muted);
     }
 </style>
