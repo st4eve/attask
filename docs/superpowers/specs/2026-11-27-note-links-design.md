@@ -1,7 +1,7 @@
 # Note links to tasks
 
 Date: 2026-11-27
-Status: draft, awaiting review
+Status: approved, implemented on spec/note-links
 
 ## Goal
 
@@ -61,7 +61,7 @@ When the route is `task`, `App.svelte` waits for the board to load (it already l
    - a task with an Area: that Area's page
    - otherwise the inbox
 4. Replaces the address with that page's hash using `history.replaceState`, so Back does not return to the `#/task/...` address and reopen the sheet.
-5. For a task, calls `select(ref)`, which opens the detail sheet as a card tap does.
+5. For a task, calls `select(ref)`, which opens the detail sheet as a card tap does. For a project or a bad link it calls `select(null)`, so a sheet left open from before does not sit over the error.
 
 The router keeps `hash` in state and updates it on `hashchange`, which `replaceState` does not fire. So `router.svelte.ts` gains `replaceRoute(hash: string)`: it calls `history.replaceState(null, "", hash)` and sets the `hash` state, so the page updates at once.
 
