@@ -9,8 +9,9 @@
     import Next from "./pages/Next.svelte";
     import Project from "./pages/Project.svelte";
     import Settings from "./pages/Settings.svelte";
-    import { board, loadBoard } from "./lib/board.svelte";
-    import { router } from "./lib/router.svelte";
+    import { board, loadBoard, select } from "./lib/board.svelte";
+    import { replaceRoute, router } from "./lib/router.svelte";
+    import { taskLanding } from "./lib/tasklink";
 
     // desktop sidebar width in px, dragged from its right edge and kept on this device
     const minWidth = 200;
@@ -88,6 +89,17 @@
     }
 
     onMount(loadBoard);
+
+    // a note link waits for the board, then becomes the page underneath and opens the task's sheet; it also runs when a link arrives while the app is open
+    $effect(() => {
+        const route = router.route;
+        if (route.page !== "task" || board.items.length === 0) return;
+        const landing = taskLanding(board.items, route.repo, route.number);
+        replaceRoute(landing.hash);
+        if (landing.error) board.error = landing.error;
+        // a project or a bad link closes any sheet left open from before
+        select(landing.selected);
+    });
 </script>
 
 <div class="layout" style="--sidebar-w: {sidebarWidth}px">
