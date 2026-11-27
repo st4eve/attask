@@ -10,3 +10,9 @@ export const router = {
         return parseRoute(hash);
     },
 };
+
+/** Swaps the address for `next` without a new history entry, so Back skips the old one, and updates `router.route` at once (replaceState fires no hashchange). */
+export function replaceRoute(next: string): void {
+    history.replaceState(null, "", next);
+    hash = next;
+}
